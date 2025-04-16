@@ -17,6 +17,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.widget.Toast
 import kotlin.math.abs
+import android.widget.Button
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var webView: WebView
@@ -40,7 +41,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         
         setContentView(R.layout.activity_main)
 
-        webView = findViewById(R.id.webView)
+        webView = findViewById(R.id.webview)
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -55,6 +56,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         
         // 初始化摇一摇功能
         initShakeDetection()
+
+        initButtons()
     }
     
     private fun initShakeDetection() {
@@ -171,6 +174,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         } else {
             super.onBackPressed()
+        }
+    }
+
+    private fun initButtons() {
+        val btnWebsocketTest = findViewById<Button>(R.id.btnWebsocketTest)
+        btnWebsocketTest.setOnClickListener {
+            val intent = Intent(this, WebSocketTestActivity::class.java)
+            startActivity(intent)
+        }
+
+        val btnBeaconScan = findViewById<Button>(R.id.btnBeaconScan)
+        btnBeaconScan.setOnClickListener {
+            val intent = Intent(this, BeaconScanActivity::class.java)
+            startActivity(intent)
         }
     }
 } 

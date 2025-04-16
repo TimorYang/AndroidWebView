@@ -10,10 +10,13 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     
     <!-- 添加传感器权限 -->
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true" />
-    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="true" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -42,6 +45,11 @@
             android:exported="false"
             android:label="WebSocket测试"
             android:theme="@style/Theme.AndroidWebView" />
+        
+        <activity
+            android:name=".BeaconScanActivity"
+            android:exported="false"
+            android:label="信标扫描" />
     </application>
 
 </manifest>
