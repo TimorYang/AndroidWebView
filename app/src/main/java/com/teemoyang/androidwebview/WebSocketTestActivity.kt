@@ -2,6 +2,7 @@ package com.teemoyang.androidwebview
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
@@ -9,11 +10,13 @@ import android.location.LocationManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.text.method.ScrollingMovementMethod
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -39,8 +42,7 @@ class WebSocketTestActivity : AppCompatActivity() {
     private var selectedConnectionType = 4 // 微信小程序格式索引
     
     // 定位相关
-    private lateinit var locationManager: LocationManager
-    private var currentLocation: Location? = null
+    private var locationHelper: LocationHelper? = null
     private val locationPermissionCode = 1001
     
     // 自动发送位置信息
@@ -49,10 +51,22 @@ class WebSocketTestActivity : AppCompatActivity() {
     private val autoSendInterval = 2000L // 2秒发送一次
     private val autoSendRunnable = object : Runnable {
         override fun run() {
-            if (isAutoSendEnabled && isConnected && currentLocation != null) {
-                sendLocationMessage()
-                // 再次调度
-                autoSendHandler.postDelayed(this, autoSendInterval)
+            if (isAutoSendEnabled && isConnected) {
+                val location = locationHelper?.getCurrentLocation()
+                if (location != null) {
+                    logMessage("准备自动发送位置信息...", LogType.SYSTEM)
+                    sendLocationMessage(location)
+                    // 再次调度
+                    autoSendHandler.postDelayed(this, autoSendInterval)
+                } else {
+                    logMessage("等待获取位置信息...", LogType.SYSTEM)
+                    // 继续等待位置信息
+                    autoSendHandler.postDelayed(this, autoSendInterval)
+                }
+            } else if (isAutoSendEnabled && !isConnected) {
+                logMessage("WebSocket未连接，无法自动发送位置", LogType.ERROR)
+                isAutoSendEnabled = false
+                binding.autoSendSwitch.isChecked = false
             }
         }
     }
@@ -60,8 +74,8 @@ class WebSocketTestActivity : AppCompatActivity() {
     // 定位监听器
     private val locationListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
-            currentLocation = location
             updateLocationInfo(location)
+            logMessage("位置已更新: 纬度=${location.latitude}, 经度=${location.longitude}, 精度=${location.accuracy}米", LogType.SYSTEM)
         }
         
         override fun onProviderDisabled(provider: String) {
@@ -81,18 +95,22 @@ class WebSocketTestActivity : AppCompatActivity() {
         // 设置标题
         title = "WebSocket测试工具"
 
-        // 自动填充设备ID
+        // 设置默认的服务器地址和设备ID
+        binding.urlInput.setText("https://navmobiletest.joysuch.com")
         loadOrGenerateDeviceId()
         
         // 设置消息类型下拉菜单
         setupMessageTypeSpinner()
         
-        // 注释掉连接方式下拉菜单设置
-        // setupConnectionTypeSpinner()
-        
         // 隐藏连接方式选择UI元素
         binding.connectionTypeSpinner.visibility = View.GONE
         binding.connectionTypeLabel.visibility = View.GONE
+        
+        // 隐藏发送消息相关UI元素
+        binding.sendMessageLabel.visibility = View.GONE
+        binding.messageTypeSpinner.visibility = View.GONE
+        binding.messageInputLayout.visibility = View.GONE
+        binding.sendButton.visibility = View.GONE
         
         // 设置日志文本可滚动
         binding.logsTextView.movementMethod = ScrollingMovementMethod()
@@ -103,8 +121,9 @@ class WebSocketTestActivity : AppCompatActivity() {
         // 添加自动发送位置按钮
         setupAutoSendLocationButton()
         
-        // 初始化定位
-        initLocation()
+        // 记录默认连接信息
+        logMessage("默认服务器地址: ${binding.urlInput.text}", LogType.SYSTEM)
+        logMessage("默认设备ID: ${binding.deviceIdInput.text}", LogType.SYSTEM)
     }
     
     private fun setupAutoSendLocationButton() {
@@ -114,41 +133,71 @@ class WebSocketTestActivity : AppCompatActivity() {
             
             if (isChecked) {
                 if (isConnected) {
-                    if (currentLocation == null) {
+                    // 初始化位置服务
+                    if (locationHelper == null) {
+                        initLocationHelper()
+                        startLocationService()
+                    } else {
+                        // 如果已经初始化过，但可能被释放了，重新启动
+                        startLocationService()
+                    }
+                    
+                    val location = locationHelper?.getCurrentLocation()
+                    if (location == null) {
                         Toast.makeText(this, "等待获取位置信息...", Toast.LENGTH_SHORT).show()
+                        logMessage("等待获取位置信息...", LogType.SYSTEM)
+                    } else {
+                        logMessage("已开启自动发送位置 (每${autoSendInterval/1000}秒)", LogType.SYSTEM)
                     }
                     
                     // 开始自动发送
                     autoSendHandler.removeCallbacks(autoSendRunnable)
                     autoSendHandler.postDelayed(autoSendRunnable, autoSendInterval)
-                    logMessage("已开启自动发送位置 (每${autoSendInterval/1000}秒)", LogType.SYSTEM)
                 } else {
                     binding.autoSendSwitch.isChecked = false
                     Toast.makeText(this, "请先连接WebSocket", Toast.LENGTH_SHORT).show()
+                    logMessage("无法开启自动发送: WebSocket未连接", LogType.ERROR)
                 }
             } else {
                 // 停止自动发送
                 autoSendHandler.removeCallbacks(autoSendRunnable)
                 logMessage("已停止自动发送位置", LogType.SYSTEM)
+                
+                // 释放位置服务资源
+                locationHelper?.release()
+                locationHelper = null
+                logMessage("位置服务已停止", LogType.SYSTEM)
             }
         }
     }
     
-    private fun sendLocationMessage() {
-        if (!isConnected || currentLocation == null) return
+    private fun sendLocationMessage(location: Location) {
+        if (!isConnected) {
+            logMessage("无法发送位置: WebSocket未连接", LogType.ERROR)
+            return
+        }
         
         try {
+            val latitude = location.latitude
+            val longitude = location.longitude
+            val accuracy = location.accuracy
+            
+            // 打印详细的位置信息
+            logMessage("准备发送位置: 纬度=$latitude, 经度=$longitude, 精度=${accuracy}米", LogType.SYSTEM)
+            
             val locationJson = JSONObject().apply {
-                put("latitude", currentLocation!!.latitude)
-                put("longitude", currentLocation!!.longitude)
-                put("accuracy", currentLocation!!.accuracy)
+                put("latitude", latitude)
+                put("longitude", longitude)
+                put("accuracy", accuracy)
             }
+            
+            logMessage("正在发送位置信息: $locationJson", LogType.SYSTEM)
             
             // 使用位置消息类型 (status=1)
             val success = webSocketManager.send("1", selectedRecipient, locationJson)
             
             if (success) {
-                logMessage("自动发送位置: data=$locationJson", LogType.SENT)
+                logMessage("自动发送位置成功: 纬度=$latitude, 经度=$longitude, 精度=${accuracy}米", LogType.SENT)
             } else {
                 logMessage("自动发送位置失败", LogType.ERROR)
                 // 如果发送失败，停止自动发送
@@ -157,101 +206,62 @@ class WebSocketTestActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             logMessage("自动发送位置错误: ${e.message}", LogType.ERROR)
+            // 发生错误时停止自动发送
+            isAutoSendEnabled = false
+            binding.autoSendSwitch.isChecked = false
         }
     }
     
-    private fun initLocation() {
-        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    private fun initLocationHelper() {
+        // 创建LocationHelper实例
+        locationHelper = LocationHelper(this)
         
+        // 设置位置更新监听器
+        locationHelper?.setOnLocationUpdateListener(object : LocationHelper.OnLocationUpdateListener {
+            override fun onLocationUpdated(location: Location) {
+                updateLocationInfo(location)
+            }
+        })
+        
+        // 设置位置错误监听器
+        locationHelper?.setOnLocationErrorListener(object : LocationHelper.OnLocationErrorListener {
+            override fun onLocationError(errorMessage: String) {
+                logMessage(errorMessage, LogType.ERROR)
+            }
+        })
+        
+        // 设置位置更新间隔
+        locationHelper?.setUpdateInterval(1000) // 1秒更新一次
+        locationHelper?.setMinDistanceChange(1f) // 1米变化更新一次
+        
+        logMessage("位置服务已初始化", LogType.SYSTEM)
+    }
+    
+    private fun startLocationService() {
         // 检查定位权限
-        if (checkLocationPermission()) {
-            startLocationUpdates()
+        if (locationHelper?.checkLocationPermission() == true) {
+            // 检查位置服务是否开启
+            if (locationHelper?.isLocationServiceEnabled() == true) {
+                startLocationUpdates()
+            } else {
+                logMessage("位置服务未开启，请开启位置服务", LogType.ERROR)
+                Toast.makeText(this, "请开启位置服务", Toast.LENGTH_LONG).show()
+                // 提示用户开启位置服务
+                locationHelper?.showLocationSettingsDialog(this)
+            }
         } else {
             // 请求定位权限
-            requestLocationPermission()
+            logMessage("请求位置权限...", LogType.SYSTEM)
+            locationHelper?.requestLocationPermission(this, locationPermissionCode)
         }
-    }
-    
-    private fun checkLocationPermission(): Boolean {
-        return (ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ) == PackageManager.PERMISSION_GRANTED)
-    }
-    
-    private fun requestLocationPermission() {
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ),
-            locationPermissionCode
-        )
     }
     
     private fun startLocationUpdates() {
-        try {
-            // 检查是否有可用的定位提供者
-            val isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-            val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-            
-            when {
-                isGPSEnabled -> {
-                    if (ActivityCompat.checkSelfPermission(
-                            this,
-                            Manifest.permission.ACCESS_FINE_LOCATION
-                        ) == PackageManager.PERMISSION_GRANTED
-                    ) {
-                        locationManager.requestLocationUpdates(
-                            LocationManager.GPS_PROVIDER,
-                            5000, // 5秒更新一次
-                            5f,   // 5米变化更新一次
-                            locationListener
-                        )
-                        logMessage("GPS定位已启动", LogType.SYSTEM)
-                        
-                        // 获取最近一次的位置
-                        val lastLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                        if (lastLocation != null) {
-                            currentLocation = lastLocation
-                            updateLocationInfo(lastLocation)
-                        }
-                    }
-                }
-                isNetworkEnabled -> {
-                    if (ActivityCompat.checkSelfPermission(
-                            this,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                        ) == PackageManager.PERMISSION_GRANTED
-                    ) {
-                        locationManager.requestLocationUpdates(
-                            LocationManager.NETWORK_PROVIDER,
-                            5000, // 5秒更新一次
-                            5f,   // 5米变化更新一次
-                            locationListener
-                        )
-                        logMessage("网络定位已启动", LogType.SYSTEM)
-                        
-                        // 获取最近一次的位置
-                        val lastLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                        if (lastLocation != null) {
-                            currentLocation = lastLocation
-                            updateLocationInfo(lastLocation)
-                        }
-                    }
-                }
-                else -> {
-                    logMessage("没有可用的定位提供者", LogType.ERROR)
-                    Toast.makeText(this, "请开启GPS或网络定位", Toast.LENGTH_LONG).show()
-                }
-            }
-        } catch (e: Exception) {
-            logMessage("启动定位失败: ${e.message}", LogType.ERROR)
+        val success = locationHelper?.startLocationUpdates() ?: false
+        if (success) {
+            logMessage("位置更新已启动", LogType.SYSTEM)
+        } else {
+            logMessage("位置更新启动失败", LogType.ERROR)
         }
     }
     
@@ -260,7 +270,8 @@ class WebSocketTestActivity : AppCompatActivity() {
         val longitude = location.longitude
         val accuracy = location.accuracy
         
-        logMessage("位置更新: 经度=$longitude, 纬度=$latitude, 精度=${accuracy}米", LogType.SYSTEM)
+        // 打印更详细的位置信息
+        logMessage("位置更新: 纬度=$latitude, 经度=$longitude, 精度=${accuracy}米", LogType.SYSTEM)
         
         // 如果当前选择的是位置消息类型(索引1)，自动更新消息内容
         if (binding.messageTypeSpinner.selectedItemPosition == 1) {
@@ -281,10 +292,17 @@ class WebSocketTestActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == locationPermissionCode) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                startLocationUpdates()
+                // 只有在自动发送开启时才启动位置更新
+                if (isAutoSendEnabled) {
+                    startLocationUpdates()
+                }
             } else {
                 logMessage("定位权限被拒绝", LogType.ERROR)
                 Toast.makeText(this, "需要定位权限才能获取位置信息", Toast.LENGTH_LONG).show()
+                
+                // 权限被拒绝，关闭自动发送
+                isAutoSendEnabled = false
+                binding.autoSendSwitch.isChecked = false
             }
         }
     }
@@ -361,11 +379,12 @@ class WebSocketTestActivity : AppCompatActivity() {
             0 -> """{"status": 0}""" // 心跳消息
             1 -> {
                 // 如果有位置信息，使用实际位置，否则使用示例
-                if (currentLocation != null) {
+                val location = locationHelper?.getCurrentLocation()
+                if (location != null) {
                     JSONObject().apply {
-                        put("latitude", currentLocation!!.latitude)
-                        put("longitude", currentLocation!!.longitude)
-                        put("accuracy", currentLocation!!.accuracy)
+                        put("latitude", location.latitude)
+                        put("longitude", location.longitude)
+                        put("accuracy", location.accuracy)
                     }.toString()
                 } else {
                     """{"latitude": 30.123, "longitude": 120.456, "accuracy": 10.0}"""
@@ -474,6 +493,11 @@ class WebSocketTestActivity : AppCompatActivity() {
                     // 停止自动发送
                     isAutoSendEnabled = false
                     binding.autoSendSwitch.isChecked = false
+                    
+                    // 释放位置服务资源
+                    locationHelper?.release()
+                    locationHelper = null
+                    logMessage("位置服务已停止", LogType.SYSTEM)
                 }
             }
             
@@ -552,7 +576,6 @@ class WebSocketTestActivity : AppCompatActivity() {
     private fun updateButtonState() {
         binding.connectButton.isEnabled = !isConnected
         binding.disconnectButton.isEnabled = isConnected
-        binding.sendButton.isEnabled = isConnected
         
         // 自动发送开关只有在连接状态下才能启用
         binding.autoSendSwitch.isEnabled = isConnected
@@ -596,11 +619,8 @@ class WebSocketTestActivity : AppCompatActivity() {
     
     override fun onDestroy() {
         // 停止位置更新
-        try {
-            locationManager.removeUpdates(locationListener)
-        } catch (e: Exception) {
-            // 忽略可能的安全异常
-        }
+        locationHelper?.release()
+        locationHelper = null
         
         // 停止自动发送
         autoSendHandler.removeCallbacks(autoSendRunnable)
@@ -608,5 +628,15 @@ class WebSocketTestActivity : AppCompatActivity() {
         // 关闭WebSocket连接
         webSocketManager.close()
         super.onDestroy()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 在Activity恢复时，只有当WebSocket已连接且自动发送开启时才检查位置服务状态
+        if (isConnected && isAutoSendEnabled && locationHelper != null && 
+            locationHelper?.checkLocationPermission() == true && 
+            locationHelper?.isLocationServiceEnabled() == true) {
+            startLocationUpdates()
+        }
     }
 } 

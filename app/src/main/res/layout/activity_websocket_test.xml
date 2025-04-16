@@ -11,6 +11,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:hint="WebSocket服务器地址"
+        android:visibility="gone"
         app:layout_constraintTop_toTopOf="parent">
 
         <com.google.android.material.textfield.TextInputEditText
@@ -27,6 +28,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:hint="唯一标识(deviceId)"
+        android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/urlInputLayout">
 
         <com.google.android.material.textfield.TextInputEditText
@@ -63,7 +65,7 @@
         app:layout_constraintEnd_toStartOf="@id/disconnectButton"
         app:layout_constraintHorizontal_chainStyle="spread"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/deviceIdInputLayout" />
+        app:layout_constraintTop_toTopOf="parent" />
 
     <Button
         android:id="@+id/disconnectButton"
@@ -102,6 +104,7 @@
         android:layout_marginTop="16dp"
         android:text="发送消息"
         android:textSize="16sp"
+        android:visibility="gone"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/divider" />
 
@@ -110,6 +113,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
+        android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/sendMessageLabel" />
 
     <com.google.android.material.textfield.TextInputLayout
@@ -118,6 +122,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:hint="消息内容 (JSON格式)"
+        android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/messageTypeSpinner">
 
         <com.google.android.material.textfield.TextInputEditText
@@ -136,6 +141,7 @@
         android:layout_marginTop="8dp"
         android:enabled="false"
         android:text="发送消息"
+        android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/messageInputLayout" />
 
     <androidx.appcompat.widget.SwitchCompat
@@ -148,7 +154,7 @@
         android:text="自动发送位置"
         android:textSize="14sp"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/sendButton" />
+        app:layout_constraintTop_toBottomOf="@id/divider" />
 
     <TextView
         android:id="@+id/logsLabel"
