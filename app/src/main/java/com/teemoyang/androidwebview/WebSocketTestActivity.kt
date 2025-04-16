@@ -87,6 +87,9 @@ class WebSocketTestActivity : AppCompatActivity() {
         }
     }
 
+    // 添加一个标志位，记录用户是否正在尝试开启自动发送位置
+    private var isAttemptingToEnableAutoSend = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityWebsocketTestBinding.inflate(layoutInflater)
@@ -133,6 +136,9 @@ class WebSocketTestActivity : AppCompatActivity() {
             
             if (isChecked) {
                 if (isConnected) {
+                    // 设置标志位，表示用户正在尝试开启自动发送
+                    isAttemptingToEnableAutoSend = true
+                    
                     // 初始化位置服务
                     if (locationHelper == null) {
                         initLocationHelper()
@@ -142,13 +148,8 @@ class WebSocketTestActivity : AppCompatActivity() {
                         startLocationService()
                     }
                     
-                    val location = locationHelper?.getCurrentLocation()
-                    if (location == null) {
-                        Toast.makeText(this, "等待获取位置信息...", Toast.LENGTH_SHORT).show()
-                        logMessage("等待获取位置信息...", LogType.SYSTEM)
-                    } else {
-                        logMessage("已开启自动发送位置 (每${autoSendInterval/1000}秒)", LogType.SYSTEM)
-                    }
+                    // 立即尝试获取一次位置
+                    locationHelper?.getCurrentLocation()
                     
                     // 开始自动发送
                     autoSendHandler.removeCallbacks(autoSendRunnable)
@@ -167,6 +168,9 @@ class WebSocketTestActivity : AppCompatActivity() {
                 locationHelper?.release()
                 locationHelper = null
                 logMessage("位置服务已停止", LogType.SYSTEM)
+                
+                // 重置标志位
+                isAttemptingToEnableAutoSend = false
             }
         }
     }
@@ -213,55 +217,71 @@ class WebSocketTestActivity : AppCompatActivity() {
     }
     
     private fun initLocationHelper() {
-        // 创建LocationHelper实例
         locationHelper = LocationHelper(this)
-        
-        // 设置位置更新监听器
         locationHelper?.setOnLocationUpdateListener(object : LocationHelper.OnLocationUpdateListener {
             override fun onLocationUpdated(location: Location) {
-                updateLocationInfo(location)
+                runOnUiThread {
+                    logMessage("位置更新: 纬度=${location.latitude}, 经度=${location.longitude}, 精度=${location.accuracy}米", LogType.SYSTEM)
+                    
+                    // 如果正在自动发送，立即发送一次位置
+                    if (isAutoSendEnabled && isConnected) {
+                        sendLocationMessage(location)
+                    }
+                }
             }
         })
         
-        // 设置位置错误监听器
         locationHelper?.setOnLocationErrorListener(object : LocationHelper.OnLocationErrorListener {
             override fun onLocationError(errorMessage: String) {
-                logMessage(errorMessage, LogType.ERROR)
+                runOnUiThread {
+                    logMessage(errorMessage, LogType.ERROR)
+                    binding.autoSendSwitch.isChecked = false
+                }
             }
         })
         
-        // 设置位置更新间隔
-        locationHelper?.setUpdateInterval(1000) // 1秒更新一次
-        locationHelper?.setMinDistanceChange(1f) // 1米变化更新一次
+        locationHelper?.setOnPermissionCallback(object : LocationHelper.OnPermissionCallback {
+            override fun onPermissionGranted() {
+                startLocationService()
+            }
+            
+            override fun onPermissionDenied() {
+                runOnUiThread {
+                    logMessage("位置权限被拒绝", LogType.ERROR)
+                    binding.autoSendSwitch.isChecked = false
+                }
+            }
+        })
         
-        logMessage("位置服务已初始化", LogType.SYSTEM)
+        locationHelper?.setOnLocationServiceCallback(object : LocationHelper.OnLocationServiceCallback {
+            override fun onLocationServiceEnabled() {
+                runOnUiThread {
+                    logMessage("位置服务已开启", LogType.SYSTEM)
+                }
+            }
+            
+            override fun onLocationServiceDisabled() {
+                runOnUiThread {
+                    logMessage("位置服务已关闭", LogType.ERROR)
+                    binding.autoSendSwitch.isChecked = false
+                }
+            }
+        })
     }
     
     private fun startLocationService() {
-        // 检查定位权限
-        if (locationHelper?.checkLocationPermission() == true) {
-            // 检查位置服务是否开启
-            if (locationHelper?.isLocationServiceEnabled() == true) {
-                startLocationUpdates()
-            } else {
-                logMessage("位置服务未开启，请开启位置服务", LogType.ERROR)
-                Toast.makeText(this, "请开启位置服务", Toast.LENGTH_LONG).show()
-                // 提示用户开启位置服务
-                locationHelper?.showLocationSettingsDialog(this)
-            }
-        } else {
-            // 请求定位权限
-            logMessage("请求位置权限...", LogType.SYSTEM)
-            locationHelper?.requestLocationPermission(this, locationPermissionCode)
+        if (!locationHelper?.checkLocationPermission()!!) {
+            locationHelper?.showPermissionRationaleDialog(this, LocationHelper.LOCATION_PERMISSION_REQUEST_CODE)
+            return
         }
-    }
-    
-    private fun startLocationUpdates() {
-        val success = locationHelper?.startLocationUpdates() ?: false
-        if (success) {
-            logMessage("位置更新已启动", LogType.SYSTEM)
-        } else {
-            logMessage("位置更新启动失败", LogType.ERROR)
+        
+        if (!locationHelper?.isLocationServiceEnabled()!!) {
+            locationHelper?.showLocationSettingsDialog(this)
+            return
+        }
+        
+        if (locationHelper?.startLocationUpdates()!!) {
+            logMessage("位置服务已启动", LogType.SYSTEM)
         }
     }
     
@@ -290,21 +310,7 @@ class WebSocketTestActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == locationPermissionCode) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // 只有在自动发送开启时才启动位置更新
-                if (isAutoSendEnabled) {
-                    startLocationUpdates()
-                }
-            } else {
-                logMessage("定位权限被拒绝", LogType.ERROR)
-                Toast.makeText(this, "需要定位权限才能获取位置信息", Toast.LENGTH_LONG).show()
-                
-                // 权限被拒绝，关闭自动发送
-                isAutoSendEnabled = false
-                binding.autoSendSwitch.isChecked = false
-            }
-        }
+        locationHelper?.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
     
     private fun loadOrGenerateDeviceId() {
@@ -378,17 +384,8 @@ class WebSocketTestActivity : AppCompatActivity() {
         val jsonExample = when (position) {
             0 -> """{"status": 0}""" // 心跳消息
             1 -> {
-                // 如果有位置信息，使用实际位置，否则使用示例
-                val location = locationHelper?.getCurrentLocation()
-                if (location != null) {
-                    JSONObject().apply {
-                        put("latitude", location.latitude)
-                        put("longitude", location.longitude)
-                        put("accuracy", location.accuracy)
-                    }.toString()
-                } else {
-                    """{"latitude": 30.123, "longitude": 120.456, "accuracy": 10.0}"""
-                }
+                // 使用静态示例位置，不主动获取实际位置
+                """{"latitude": 30.123, "longitude": 120.456, "accuracy": 10.0}"""
             }
             2 -> """{"type": "blueTooth", "status": true}""" // 状态消息
             3 -> """{"authorizationStatus": true}""" // 授权状态
@@ -633,10 +630,12 @@ class WebSocketTestActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         // 在Activity恢复时，只有当WebSocket已连接且自动发送开启时才检查位置服务状态
-        if (isConnected && isAutoSendEnabled && locationHelper != null && 
-            locationHelper?.checkLocationPermission() == true && 
-            locationHelper?.isLocationServiceEnabled() == true) {
-            startLocationUpdates()
+        if (isConnected && isAutoSendEnabled && locationHelper != null) {
+            val hasPermission = locationHelper?.checkLocationPermission() ?: false
+            val isServiceEnabled = locationHelper?.isLocationServiceEnabled() ?: false
+            if (hasPermission && isServiceEnabled) {
+                startLocationService()
+            }
         }
     }
 } 
