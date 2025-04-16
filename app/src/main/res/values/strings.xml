@@ -1,3 +1,29 @@
 <resources>
     <string name="app_name">AndroidWebView</string>
+    
+    <!-- WebSocket消息类型 -->
+    <string-array name="message_types">
+        <item>心跳消息</item>
+        <item>位置消息</item>
+        <item>状态消息</item>
+        <item>授权状态</item>
+        <item>自定义消息</item>
+    </string-array>
+    
+    <string-array name="message_status">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>4</item>
+        <item>custom</item>
+    </string-array>
+    
+    <!-- WebSocket连接方式 -->
+    <string-array name="connection_types">
+        <item>方式1: 直接使用URL (https://)</item>
+        <item>方式2: WSS协议 + /ws路径</item>
+        <item>方式3: WSS协议 + /websocket路径</item>
+        <item>方式4: WSS协议 + 无额外路径</item>
+        <item>方式5: 微信小程序格式 (wss://.../locationEngine/websocket/deviceId_WeChat___timestamp)</item>
+    </string-array>
 </resources>
