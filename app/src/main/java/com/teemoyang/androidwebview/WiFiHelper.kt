@@ -307,10 +307,60 @@ class WiFiHelper(private val context: Context) {
     }
     
     /**
+     * 开始周期性WiFi扫描
+     * @param interval 扫描间隔（毫秒）
+     */
+    private var periodicScanHandler: android.os.Handler? = null
+    private var periodicScanRunnable: Runnable? = null
+    
+    fun startPeriodicScan(interval: Long) {
+        stopPeriodicScan() // 先停止之前的周期性扫描
+        
+        if (periodicScanHandler == null) {
+            periodicScanHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        }
+        
+        periodicScanRunnable = object : Runnable {
+            override fun run() {
+                if (isWifiEnabled()) {
+                    Log.d(TAG, "执行周期性WiFi扫描")
+                    startWifiScan()
+                } else {
+                    Log.d(TAG, "WiFi未开启，跳过周期性扫描")
+                }
+                
+                // 继续下一次扫描
+                periodicScanHandler?.postDelayed(this, interval)
+            }
+        }
+        
+        // 立即执行第一次扫描
+        periodicScanRunnable?.let {
+            periodicScanHandler?.post(it)
+        }
+        
+        Log.d(TAG, "已启动周期性WiFi扫描, 间隔: $interval ms")
+    }
+    
+    /**
+     * 停止周期性WiFi扫描
+     */
+    fun stopPeriodicScan() {
+        periodicScanRunnable?.let {
+            periodicScanHandler?.removeCallbacks(it)
+            periodicScanRunnable = null
+        }
+        
+        Log.d(TAG, "已停止周期性WiFi扫描")
+    }
+    
+    /**
      * 释放资源
      */
     fun release() {
         stopWifiScan()
+        stopPeriodicScan()
+        periodicScanHandler = null
         wifiManager = null
         onScanResultListener = null
         onScanErrorListener = null

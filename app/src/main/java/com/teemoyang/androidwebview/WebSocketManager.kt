@@ -37,36 +37,8 @@ class WebSocketManager {
     fun init(params: Map<String, String>, callback: WebSocketCallback) {
         wsUrl = params["url"] ?: ""
         deviceId = params["deviceId"] ?: ""
-        val connectionType = params["connectionType"]?.toIntOrNull() ?: 0 // 默认使用第一种连接方式
         this.callback = callback
         this.lastConnectionParams = params
-        
-        // 基于不同的连接类型构建URL
-        when (connectionType) {
-            0 -> {
-                // 方式1: 直接使用原始URL
-                // 例如: https://navmobiletest.joysuch.com
-                // 不做任何协议转换
-            }
-            1 -> {
-                // 方式2: 使用WSS协议，添加/ws路径
-                if (!wsUrl.startsWith("ws")) {
-                    wsUrl = "wss://${wsUrl.removePrefix("https://").removePrefix("http://")}/ws"
-                }
-            }
-            2 -> {
-                // 方式3: 使用WSS协议，添加/websocket路径
-                if (!wsUrl.startsWith("ws")) {
-                    wsUrl = "wss://${wsUrl.removePrefix("https://").removePrefix("http://")}/websocket"
-                }
-            }
-            3 -> {
-                // 方式4: 使用WSS协议，不添加额外路径
-                if (!wsUrl.startsWith("ws")) {
-                    wsUrl = "wss://${wsUrl.removePrefix("https://").removePrefix("http://")}"
-                }
-            }
-        }
         
         // 添加设备ID参数
         wsUrl = if (wsUrl.contains("?")) {
@@ -200,6 +172,29 @@ class WebSocketManager {
         webSocket = null
         client = null
         isConnected = false
+    }
+    
+    /**
+     * WebSocket向服务端发送数据
+     * @param type 消息类型
+     * @param to 接收者
+     * @param data 数据对象
+     * @param status 可选状态参数，默认为"1"
+     * @return 是否发送成功
+     */
+    fun webSocketSend(type: String, to: String, data: Any, status: String = "1"): Boolean {
+        // 构建消息对象
+        val message = JSONObject().apply {
+            put("messageType", type)
+            put("status", status)
+            put("deviceId", deviceId)
+            put("to", to)
+            put("from", "WeChat")
+            put("data", data)
+        }
+        
+        Log.d(TAG, "发送WebSocket消息: $message")
+        return sendMessage(message.toString())
     }
     
     // 检查是否已连接
