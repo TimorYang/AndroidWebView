@@ -18,6 +18,7 @@ import android.hardware.SensorManager
 import android.widget.Toast
 import kotlin.math.abs
 import android.widget.Button
+import android.util.Log
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var webView: WebView
@@ -35,12 +36,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        
+        // 获取并显示设备ID
+        displayDeviceId()
         
         // 设置系统栏适配
         WindowCompat.setDecorFitsSystemWindows(window, true)
         
-        setContentView(R.layout.activity_main)
-
         webView = findViewById(R.id.webview)
         webView.settings.apply {
             javaScriptEnabled = true
@@ -201,5 +205,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             val intent = Intent(this, AccelerometerActivity::class.java)
             startActivity(intent)
         }
+    }
+
+    /**
+     * 显示设备唯一标识
+     */
+    private fun displayDeviceId() {
+        // 获取设备ID
+        val deviceId = DeviceManager.getInstance().getDeviceId()
+        
+        // 显示设备ID（可以根据实际布局调整）
+        Toast.makeText(this, "设备ID: $deviceId", Toast.LENGTH_LONG).show()
+        
+        // 记录到日志
+        Log.d("MainActivity", "当前设备ID: $deviceId")
+        
+        // 同时显示设备信息
+        val deviceInfo = DeviceManager.getInstance().getDeviceInfo()
+        Log.d("MainActivity", "设备信息: $deviceInfo")
     }
 } 

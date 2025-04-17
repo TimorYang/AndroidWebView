@@ -16,8 +16,22 @@ class MyApplication : Application() {
         
         Log.d(TAG, "Application created")
         
+        // 初始化设备管理器
+        initDeviceManager()
+        
         // 初始化全局数据管理器
         initSensorDataManager()
+    }
+    
+    /**
+     * 初始化设备管理器
+     */
+    private fun initDeviceManager() {
+        // 获取单例实例并初始化
+        val manager = DeviceManager.getInstance()
+        manager.init(this)
+        
+        Log.d(TAG, "DeviceManager initialized")
     }
     
     /**
