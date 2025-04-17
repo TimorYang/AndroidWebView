@@ -25,6 +25,7 @@
     <uses-feature android:name="android.hardware.wifi" android:required="true" />
 
     <application
+        android:name=".MyApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -61,6 +62,11 @@
             android:name=".WiFiScanActivity"
             android:exported="false"
             android:label="WiFi扫描" />
+            
+        <activity
+            android:name=".AccelerometerActivity"
+            android:exported="false"
+            android:label="加速度计数据" />
     </application>
 
 </manifest>

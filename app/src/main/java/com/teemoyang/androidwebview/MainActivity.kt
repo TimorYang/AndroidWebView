@@ -195,5 +195,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             val intent = Intent(this, WiFiScanActivity::class.java)
             startActivity(intent)
         }
+        
+        val btnAccelerometer = findViewById<Button>(R.id.btnAccelerometer)
+        btnAccelerometer.setOnClickListener {
+            val intent = Intent(this, AccelerometerActivity::class.java)
+            startActivity(intent)
+        }
     }
 } 
