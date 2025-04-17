@@ -12,11 +12,17 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     
+    <!-- WiFi相关权限 -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    
     <!-- 添加传感器权限 -->
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true" />
     <uses-feature android:name="android.hardware.location.gps" android:required="true" />
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi" android:required="true" />
 
     <application
         android:allowBackup="true"
@@ -50,6 +56,11 @@
             android:name=".BeaconScanActivity"
             android:exported="false"
             android:label="信标扫描" />
+            
+        <activity
+            android:name=".WiFiScanActivity"
+            android:exported="false"
+            android:label="WiFi扫描" />
     </application>
 
 </manifest>

@@ -40,8 +40,17 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
             android:layout_weight="1"
             android:text="信标扫描" />
+
+        <Button
+            android:id="@+id/btnWifiScan"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:text="WiFi扫描" />
 
     </LinearLayout>
 

@@ -189,5 +189,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             val intent = Intent(this, BeaconScanActivity::class.java)
             startActivity(intent)
         }
+        
+        val btnWifiScan = findViewById<Button>(R.id.btnWifiScan)
+        btnWifiScan.setOnClickListener {
+            val intent = Intent(this, WiFiScanActivity::class.java)
+            startActivity(intent)
+        }
     }
 } 
