@@ -26,6 +26,9 @@ import java.nio.ByteBuffer
 import java.util.*
 import org.altbeacon.beacon.Beacon
 import org.altbeacon.beacon.Identifier
+import org.altbeacon.beacon.distance.ModelSpecificDistanceCalculator
+import org.altbeacon.beacon.distance.AndroidModel
+import org.altbeacon.beacon.BeaconManager
 
 /**
  * 信标扫描器
@@ -35,7 +38,7 @@ class BeaconScanner(private val activity: AppCompatActivity) {
     
     companion object {
         private const val TAG = "BeaconScanner"
-        private const val SCAN_PERIOD = 10000L  // 扫描时间，毫秒
+        private const val SCAN_PERIOD = 60000L  // 扫描时间增加到60秒
         private const val PERMISSION_REQUEST_CODE = 100 // 权限请求码
         
         // 蓝牙权限
@@ -67,6 +70,7 @@ class BeaconScanner(private val activity: AppCompatActivity) {
     private var bluetoothAdapter: BluetoothAdapter? = null
     private var bluetoothLeScanner: BluetoothLeScanner? = null
     private val handler = Handler(Looper.getMainLooper())
+    private val beaconManager: BeaconManager by lazy { BeaconManager.getInstanceForApplication(activity) }
     
     // 蓝牙开启请求
     private val enableBluetoothLauncher: ActivityResultLauncher<Intent> = activity.registerForActivityResult(
@@ -236,9 +240,19 @@ class BeaconScanner(private val activity: AppCompatActivity) {
             isScanning = true
             listener?.onScanStart()
             
-            // 设置超时停止扫描
+            // 设置超时后重新开始扫描
             handler.postDelayed({
-                stopScan()
+                if (isScanning) {
+                    // 暂停扫描
+                    bluetoothLeScanner?.stopScan(scanCallback)
+                    
+                    // 短暂延迟后重新开始扫描
+                    handler.postDelayed({
+                        if (isScanning) { // 确认用户没有手动停止
+                            bluetoothLeScanner?.startScan(null, settings, scanCallback)
+                        }
+                    }, 1000) // 延迟1秒后重新开始
+                }
             }, SCAN_PERIOD)
             
         } catch (e: Exception) {
@@ -286,6 +300,9 @@ class BeaconScanner(private val activity: AppCompatActivity) {
                                 .setRssi(rssi)
                                 .setBluetoothAddress(device.address)
                                 .build()
+                                
+                            // 设置距离计算器
+                            setDistanceCalculator(beacon)
                             
                             listener?.onBeaconFound(beacon)
                             return
@@ -298,16 +315,57 @@ class BeaconScanner(private val activity: AppCompatActivity) {
             val serviceUuids = scanRecord.serviceUuids
             if (serviceUuids != null) {
                 for (uuid in serviceUuids) {
+                    // 获取可能的txPower
+                    var txPower = -65 // 默认值
+                    
+                    // 尝试从广播数据中获取实际txPower
+                    // 一些设备在广播数据中包含txPower
+                    val serviceData = scanRecord.serviceData
+                    if (serviceData != null && serviceData.containsKey(uuid)) {
+                        val data = serviceData[uuid]
+                        if (data != null && data.size > 0) {
+                            // 根据不同的协议，txPower可能在不同位置
+                            // Eddystone通常在第1个字节
+                            if (uuid.toString().startsWith("0000feaa")) {
+                                if (data.size > 1) {
+                                    txPower = data[1].toInt()
+                                    Log.d(TAG, "从Eddystone广播包中提取txPower: $txPower")
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 根据RSSI估算txPower
+                    // 通常txPower是1米处的理论RSSI值
+                    // 如果无法从广播数据中获取，可以根据当前RSSI和经验公式估算
+                    if (txPower == -65) {
+                        // 假设设备在1米处的典型范围
+                        val estimatedTxPower = rssi + 41 // 简单估算：当前RSSI + 距离衰减(约41dB)
+                        if (estimatedTxPower > -45 && estimatedTxPower < -75) {
+                            // 确保估算值在合理范围内
+                            txPower = estimatedTxPower
+                            Log.d(TAG, "估算txPower: $txPower (从RSSI: $rssi)")
+                        } else {
+                            Log.d(TAG, "使用默认txPower: $txPower (RSSI: $rssi)")
+                        }
+                    }
+                    
                     // 创建一个通用信标
                     val beacon = Beacon.Builder()
                         .setId1(uuid.toString())
                         .setId2("0")
                         .setId3("0")
                         .setManufacturer(0)
-                        .setTxPower(-65) // 使用默认发射功率
+                        .setTxPower(txPower)
                         .setRssi(rssi)
                         .setBluetoothAddress(device.address)
                         .build()
+                    
+                    // 设置距离计算器
+                    setDistanceCalculator(beacon)
+                    
+                    // 添加设备类型的日志
+                    Log.d(TAG, "检测到非iBeacon设备: ${device.name ?: "未命名"}, MAC: ${device.address}")
                     
                     listener?.onBeaconFound(beacon)
                     return
@@ -316,6 +374,60 @@ class BeaconScanner(private val activity: AppCompatActivity) {
             
         } catch (e: Exception) {
             Log.e(TAG, "处理扫描结果出错: ${e.message}")
+        }
+    }
+    
+    /**
+     * 为Beacon设置距离计算器
+     */
+    private fun setDistanceCalculator(beacon: Beacon) {
+        try {
+            // 手动计算距离作为备用方案
+            val rssi = beacon.rssi
+            val txPower = beacon.txPower
+            
+            // 检查数据有效性
+            if (rssi == 0 || txPower == 0) {
+                Log.w(TAG, "无效的RSSI或txPower: rssi=$rssi, txPower=$txPower")
+                return
+            }
+            
+            // 使用简单的距离公式计算大致距离（米）
+            // 这是一个基本的距离估算，可能不太准确
+            val ratio = rssi * 1.0 / txPower
+            var distance = 0.0
+            
+            if (ratio < 1.0) {
+                distance = Math.pow(ratio, 10.0)
+            } else {
+                distance = 0.89976 * Math.pow(ratio, 7.7095) + 0.111
+            }
+            
+            // 验证计算出的距离是否合理
+            if (distance <= 0 || distance > 100 || !distance.isFinite()) {
+                Log.w(TAG, "计算出的距离值无效: $distance")
+                return
+            }
+            
+            // 设置距离到Beacon的额外数据中，如果实际库中的距离计算不可用，我们可以使用这个
+            if (beacon.distance < 0) {
+                // 反射设置距离字段 - 注意：这是一个备用方案，不建议在生产环境中使用
+                try {
+                    val distanceField = Beacon::class.java.getDeclaredField("mDistance")
+                    distanceField.isAccessible = true
+                    distanceField.setDouble(beacon, distance)
+                } catch (e: Exception) {
+                    Log.w(TAG, "无法设置Beacon距离: ${e.message}")
+                }
+            }
+            
+            // 在日志中输出计算的距离
+            Log.d(TAG, "信标信息 - UUID: ${beacon.id1}, Major: ${beacon.id2}, Minor: ${beacon.id3}")
+            Log.d(TAG, "信号强度: $rssi dBm, 发射功率: $txPower dBm")
+            Log.d(TAG, "计算的距离: ${String.format("%.2f", distance)}米, Beacon距离: ${String.format("%.2f", beacon.distance)}米")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "设置距离计算器出错: ${e.message}")
         }
     }
     

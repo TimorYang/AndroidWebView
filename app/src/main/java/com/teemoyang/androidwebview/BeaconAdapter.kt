@@ -106,8 +106,12 @@ class BeaconAdapter : RecyclerView.Adapter<BeaconAdapter.BeaconViewHolder>() {
             tvMajor.text = beacon.id2.toInt().toString()
             tvMinor.text = beacon.id3.toInt().toString()
             
-            // 根据距离显示不同颜色
-            val distanceText = String.format("%.2f m", beacon.distance)
+            // 距离显示：如果距离无效（小于0）则显示"-"
+            val distanceText = if (beacon.distance < 0) {
+                "-"
+            } else {
+                String.format("%.2f m", beacon.distance)
+            }
             tvDistance.text = distanceText
             
             // 信号强度
