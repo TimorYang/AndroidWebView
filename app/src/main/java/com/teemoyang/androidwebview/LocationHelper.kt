@@ -12,6 +12,7 @@ import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
@@ -19,6 +20,10 @@ import androidx.core.content.ContextCompat
  * 位置信息帮助类，封装了位置相关的所有功能
  */
 class LocationHelper(private val context: Context) {
+    companion object {
+        const val TAG = "LocationHelper"
+        const val LOCATION_PERMISSION_REQUEST_CODE = 100
+    }
 
     private var locationManager: LocationManager? = null
     private var locationListener: LocationListener? = null
@@ -29,6 +34,12 @@ class LocationHelper(private val context: Context) {
     
     private var updateInterval: Long = 1000 // 默认1秒更新一次
     private var minDistanceChange: Float = 1f // 默认1米变化更新一次
+    
+    // 是否自动更新到SensorDataManager
+    private var autoUpdateToSensorManager: Boolean = true
+    
+    // 是否打印详细日志
+    private var enableVerboseLogging: Boolean = true
     
     init {
         locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
@@ -52,7 +63,14 @@ class LocationHelper(private val context: Context) {
      * 权限回调接口
      */
     interface OnPermissionCallback {
+        /**
+         * 权限已授予
+         */
         fun onPermissionGranted()
+        
+        /**
+         * 权限被拒绝
+         */
         fun onPermissionDenied()
     }
     
@@ -65,47 +83,86 @@ class LocationHelper(private val context: Context) {
     }
     
     /**
+     * 设置是否打印详细日志
+     */
+    fun setEnableVerboseLogging(enable: Boolean): LocationHelper {
+        this.enableVerboseLogging = enable
+        return this
+    }
+    
+    /**
+     * 设置是否自动更新到SensorDataManager
+     */
+    fun setAutoUpdateToSensorManager(enable: Boolean): LocationHelper {
+        this.autoUpdateToSensorManager = enable
+        return this
+    }
+    
+    /**
+     * 打印日志
+     */
+    private fun logDebug(message: String) {
+        if (enableVerboseLogging) {
+            Log.d(TAG, message)
+        }
+    }
+    
+    private fun logInfo(message: String) {
+        Log.i(TAG, message)
+    }
+    
+    private fun logError(message: String) {
+        Log.e(TAG, message)
+    }
+    
+    /**
      * 设置位置更新监听器
      */
-    fun setOnLocationUpdateListener(listener: OnLocationUpdateListener) {
+    fun setOnLocationUpdateListener(listener: OnLocationUpdateListener): LocationHelper {
         onLocationUpdateListener = listener
+        return this
     }
     
     /**
      * 设置位置错误监听器
      */
-    fun setOnLocationErrorListener(listener: OnLocationErrorListener) {
+    fun setOnLocationErrorListener(listener: OnLocationErrorListener): LocationHelper {
         onLocationErrorListener = listener
+        return this
     }
     
     /**
      * 设置权限回调
      */
-    fun setOnPermissionCallback(callback: OnPermissionCallback) {
+    fun setOnPermissionCallback(callback: OnPermissionCallback): LocationHelper {
         onPermissionCallback = callback
+        return this
     }
     
     /**
      * 设置位置服务状态回调
      */
-    fun setOnLocationServiceCallback(callback: OnLocationServiceCallback) {
+    fun setOnLocationServiceCallback(callback: OnLocationServiceCallback): LocationHelper {
         onLocationServiceCallback = callback
+        return this
     }
     
     /**
      * 设置位置更新间隔
      * @param interval 更新间隔（毫秒）
      */
-    fun setUpdateInterval(interval: Long) {
+    fun setUpdateInterval(interval: Long): LocationHelper {
         updateInterval = interval
+        return this
     }
     
     /**
      * 设置位置变化阈值
      * @param distance 变化阈值（米）
      */
-    fun setMinDistanceChange(distance: Float) {
+    fun setMinDistanceChange(distance: Float): LocationHelper {
         minDistanceChange = distance
+        return this
     }
     
     /**
@@ -168,8 +225,10 @@ class LocationHelper(private val context: Context) {
     ): Boolean {
         if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                logInfo("位置权限已授予")
                 onPermissionCallback?.onPermissionGranted()
             } else {
+                logInfo("位置权限被拒绝")
                 onPermissionCallback?.onPermissionDenied()
             }
             return true
@@ -223,28 +282,46 @@ class LocationHelper(private val context: Context) {
         try {
             locationListener = object : LocationListener {
                 override fun onLocationChanged(location: Location) {
+                    logDebug("位置已更新: ${location.latitude}, ${location.longitude}")
+                    
+                    // 通知自定义监听器
                     onLocationUpdateListener?.onLocationUpdated(location)
+                    
+                    // 自动更新到SensorDataManager
+                    if (autoUpdateToSensorManager) {
+                        try {
+                            SensorDataManager.getInstance().updateLocation(location)
+                            logDebug("位置已更新到SensorDataManager")
+                        } catch (e: Exception) {
+                            logError("更新位置到SensorDataManager失败: ${e.message}")
+                        }
+                    }
                 }
                 
                 override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {
                     when (status) {
                         android.location.LocationProvider.AVAILABLE -> {
+                            logInfo("位置服务可用")
                             onLocationServiceCallback?.onLocationServiceEnabled()
                         }
                         android.location.LocationProvider.TEMPORARILY_UNAVAILABLE -> {
+                            logInfo("位置服务暂时不可用")
                             onLocationErrorListener?.onLocationError("位置服务暂时不可用")
                         }
                         android.location.LocationProvider.OUT_OF_SERVICE -> {
+                            logInfo("位置服务不可用")
                             onLocationServiceCallback?.onLocationServiceDisabled()
                         }
                     }
                 }
                 
                 override fun onProviderEnabled(provider: String) {
+                    logInfo("位置提供者已启用: $provider")
                     onLocationServiceCallback?.onLocationServiceEnabled()
                 }
                 
                 override fun onProviderDisabled(provider: String) {
+                    logInfo("位置提供者已禁用: $provider")
                     onLocationServiceCallback?.onLocationServiceDisabled()
                 }
             }
@@ -257,6 +334,7 @@ class LocationHelper(private val context: Context) {
                     minDistanceChange,
                     locationListener!!
                 )
+                logInfo("已启动GPS位置更新")
             }
             
             // 添加网络位置提供者
@@ -267,6 +345,7 @@ class LocationHelper(private val context: Context) {
                     minDistanceChange,
                     locationListener!!
                 )
+                logInfo("已启动网络位置更新")
             }
             
             // 如果两种提供者都不可用，返回失败
@@ -278,6 +357,7 @@ class LocationHelper(private val context: Context) {
             
             return true
         } catch (e: Exception) {
+            logError("启动位置更新失败: ${e.message}")
             onLocationErrorListener?.onLocationError("启动位置更新失败: ${e.message}")
             return false
         }
@@ -290,6 +370,60 @@ class LocationHelper(private val context: Context) {
         locationListener?.let {
             locationManager?.removeUpdates(it)
             locationListener = null
+            logInfo("位置更新已停止")
+        }
+    }
+    
+    /**
+     * 一键启动位置服务，简化MainActivity中的调用
+     * 封装了权限检查、服务检查和启动操作
+     */
+    fun startLocationService(activity: Activity) {
+        logInfo("一键启动位置服务")
+        
+        // 设置默认权限回调（如果用户没有自定义）
+        if (onPermissionCallback == null) {
+            setOnPermissionCallback(object : OnPermissionCallback {
+                override fun onPermissionGranted() {
+                    logInfo("位置权限已获取，检查位置服务...")
+                    if (isLocationServiceEnabled()) {
+                        startLocationUpdates()
+                    } else {
+                        showLocationSettingsDialog(activity)
+                    }
+                }
+                
+                override fun onPermissionDenied() {
+                    logError("位置权限被拒绝，无法启动定位服务")
+                }
+            })
+        }
+        
+        // 设置默认错误处理（如果用户没有自定义）
+        if (onLocationErrorListener == null) {
+            setOnLocationErrorListener(object : OnLocationErrorListener {
+                override fun onLocationError(errorMessage: String) {
+                    logError("位置错误: $errorMessage")
+                }
+            })
+        }
+        
+        // 检查并请求权限
+        if (!checkLocationPermission()) {
+            logInfo("没有位置权限，请求授权...")
+            if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION)) {
+                showPermissionRationaleDialog(activity, LOCATION_PERMISSION_REQUEST_CODE)
+            } else {
+                requestLocationPermission(activity, LOCATION_PERMISSION_REQUEST_CODE)
+            }
+        } else {
+            logInfo("已有位置权限，检查位置服务...")
+            // 已有权限，检查位置服务
+            if (isLocationServiceEnabled()) {
+                startLocationUpdates()
+            } else {
+                showLocationSettingsDialog(activity)
+            }
         }
     }
     
@@ -317,70 +451,19 @@ class LocationHelper(private val context: Context) {
                 }
             }
             
-            // 尝试获取网络位置
-            if (locationManager?.isProviderEnabled(LocationManager.NETWORK_PROVIDER) == true) {
+            // 如果没有GPS位置或者GPS位置较旧，尝试获取网络位置
+            if (bestLocation == null || 
+                (locationManager?.isProviderEnabled(LocationManager.NETWORK_PROVIDER) == true)) {
                 val networkLocation = locationManager?.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                if (networkLocation != null) {
-                    // 如果没有GPS位置或者网络位置更新更近，使用网络位置
-                    if (bestLocation == null || networkLocation.time > bestLocation.time) {
-                        bestLocation = networkLocation
-                    }
-                }
-            }
-            
-            // 如果获取到位置，立即通知
-            if (bestLocation != null) {
-                onLocationUpdateListener?.onLocationUpdated(bestLocation)
-            } else {
-                // 没有获取到位置，尝试创建一个模拟位置用于测试
-                val mockLocation = createMockLocation()
-                if (mockLocation != null) {
-                    onLocationUpdateListener?.onLocationUpdated(mockLocation)
-                    return mockLocation
+                if (networkLocation != null && (bestLocation == null || 
+                    networkLocation.time > bestLocation.time)) {
+                    bestLocation = networkLocation
                 }
             }
             
             bestLocation
         } catch (e: Exception) {
-            onLocationErrorListener?.onLocationError("获取当前位置失败: ${e.message}")
-            null
-        }
-    }
-    
-    /**
-     * 创建一个模拟位置用于测试
-     * @return 模拟位置
-     */
-    private fun createMockLocation(): Location? {
-        return try {
-            val mockLocation = Location("mock")
-            mockLocation.latitude = 31.2304 // 上海默认位置
-            mockLocation.longitude = 121.4737
-            mockLocation.accuracy = 10.0f
-            mockLocation.time = System.currentTimeMillis()
-            mockLocation.elapsedRealtimeNanos = System.nanoTime()
-            mockLocation
-        } catch (e: Exception) {
-            null
-        }
-    }
-    
-    /**
-     * 获取位置信息的JSON字符串
-     * @return 位置信息的JSON字符串
-     */
-    fun getLocationJson(): String? {
-        val location = getCurrentLocation() ?: return null
-        
-        return try {
-            val json = org.json.JSONObject().apply {
-                put("latitude", location.latitude)
-                put("longitude", location.longitude)
-                put("accuracy", location.accuracy)
-            }
-            json.toString()
-        } catch (e: Exception) {
-            onLocationErrorListener?.onLocationError("生成位置JSON失败: ${e.message}")
+            logError("获取当前位置失败: ${e.message}")
             null
         }
     }
@@ -389,15 +472,12 @@ class LocationHelper(private val context: Context) {
      * 释放资源
      */
     fun release() {
+        logInfo("释放LocationHelper资源")
         stopLocationUpdates()
         locationManager = null
         onLocationUpdateListener = null
         onLocationErrorListener = null
         onPermissionCallback = null
         onLocationServiceCallback = null
-    }
-    
-    companion object {
-        const val LOCATION_PERMISSION_REQUEST_CODE = 1001
     }
 } 

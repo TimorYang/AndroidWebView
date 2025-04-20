@@ -33,14 +33,22 @@ import androidx.core.content.ContextCompat
 import org.altbeacon.beacon.BeaconManager
 import org.altbeacon.beacon.BeaconParser
 import org.altbeacon.beacon.Region
+import android.app.AlertDialog
+import android.net.Uri
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var webView: WebView
     private lateinit var binding: ActivityMainBinding
     
+    // 声明BeaconScanner变量
+    private var beaconScanner: BeaconScanner? = null
+    
+    // 添加传感器初始化标志
+    private var sensorsInitialized = false
+    
     // URL相关常量
     private val BASE_URL = "https://navmobiletest.joysuch.com"
-    private val MINIPROGRAM_PATH = "/navmobile/JoysuchMiniProgram/index.html#"
+    private val MINIPROGRAM_PATH = "/navmobile/JoysuchMiniProgram/index.html"
     private val WS_PROTOCOL = "wss://"  // WebSocket安全协议
     private val WS_BASE_DOMAIN = "navmobiletest.joysuch.com"  // 不含协议的域名
     private val WS_PATH = "/locationEngine/websocket/"  // WebSocket路径
@@ -59,6 +67,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val SHAKE_THRESHOLD = 800 // 摇动阈值
     private val SHAKE_INTERVAL = 1000 // 两次摇动之间的最小间隔（毫秒）
     private var lastShakeTime: Long = 0
+    
+    // 添加权限结果处理
+    private var locationHelper: LocationHelper? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,7 +101,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         // get 形式 拼接 deviceId
         val deviceId = DeviceManager.getInstance().getDeviceId()
-        webView.loadUrl(BASE_URL + MINIPROGRAM_PATH + "?deviceId=$deviceId")
+        webView.loadUrl(BASE_URL + MINIPROGRAM_PATH + "?wxOpenId=$deviceId")
         
         // 设置返回键处理，兼容新旧版本Android
         setupBackNavigation()
@@ -210,6 +221,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // 注册传感器监听
         accelerometer?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+        
+        // 检查定位权限变化
+        checkLocationPermissionChanges()
+    }
+    
+    /**
+     * 检查定位权限是否发生变化（用户可能在设置中手动授予了权限）
+     */
+    private fun checkLocationPermissionChanges() {
+        // 如果locationHelper已初始化
+        locationHelper?.let { helper ->
+            // 检查当前是否有权限
+            if (helper.checkLocationPermission()) {
+                // 如果有权限且定位服务开启，但尚未启动，则重新启动
+                if (helper.isLocationServiceEnabled()) {
+                    // 尝试启动位置更新
+                    helper.startLocationUpdates()
+                    Log.d("MainActivity.Location", "onResume检测到权限已授予，启动位置更新")
+                } else {
+                    // 如果定位服务未开启，引导用户去设置页面开启
+                    helper.showLocationSettingsDialog(this@MainActivity)
+                }
+            }
         }
     }
     
@@ -366,14 +401,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      * WebView加载完成后启动所有传感器
      */
     private fun startSensorsAfterWebViewLoad() {
+        // 检查传感器是否已初始化，避免重复初始化
+        if (sensorsInitialized) {
+            Log.d("MainActivity", "传感器已经初始化，跳过...")
+            return
+        }
+        
+        // 设置标志，防止重复初始化
+        sensorsInitialized = true
+        
         Log.d("MainActivity", "开始启动所有传感器扫描...")
         
         // 1. 启动定位服务
         startLocationService()
-        
+
         // 2. 启动蓝牙扫描
         startBeaconScan()
-        
+            
         // 3. 启动WiFi扫描
         startWifiScan()
         
@@ -387,57 +431,41 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      * 启动定位服务
      */
     private fun startLocationService() {
-        Log.d("MainActivity", "启动定位服务")
-        val locationHelper = LocationHelper(this)
-        
-        // 设置位置更新监听器
-        locationHelper.setOnLocationUpdateListener(object : LocationHelper.OnLocationUpdateListener {
+        Log.d("MainActivity.Location", "启动定位服务")
+        // 存储LocationHelper实例以便在onRequestPermissionsResult中使用
+        locationHelper = LocationHelper(this)
+            .setEnableVerboseLogging(false)  // 控制日志输出
+            .setAutoUpdateToSensorManager(true) // 自动更新到SensorDataManager
+            
+        // 可选：设置自定义监听器，监听位置更新
+        locationHelper?.setOnLocationUpdateListener(object : LocationHelper.OnLocationUpdateListener {
             override fun onLocationUpdated(location: Location) {
-                Log.d("MainActivity", "位置已更新: ${location.latitude}, ${location.longitude}")
-                // 更新到全局数据管理器
-                SensorDataManager.getInstance().updateLocation(location)
+                Log.d("MainActivity.Location", "位置已更新: ${location.latitude}, ${location.longitude}")
+                // LocationHelper已自动更新到SensorDataManager，这里只做日志记录
             }
         })
         
-        // 设置位置错误监听器
-        locationHelper.setOnLocationErrorListener(object : LocationHelper.OnLocationErrorListener {
-            override fun onLocationError(errorMessage: String) {
-                Log.e("MainActivity", "定位错误: $errorMessage")
-            }
-        })
-        
-        // 设置权限回调
-        locationHelper.setOnPermissionCallback(object : LocationHelper.OnPermissionCallback {
+        // 可选：自定义权限拒绝处理
+        locationHelper?.setOnPermissionCallback(object : LocationHelper.OnPermissionCallback {
             override fun onPermissionGranted() {
-                // 启动位置更新
-                if (locationHelper.isLocationServiceEnabled()) {
-                    locationHelper.startLocationUpdates()
-                } else {
-                    // 如果是Activity，可以显示设置对话框
-                    locationHelper.showLocationSettingsDialog(this@MainActivity)
-                }
+                Log.d("MainActivity.Location", "位置权限已授予")
             }
             
             override fun onPermissionDenied() {
-                Log.e("MainActivity", "位置权限被拒绝")
+                Log.e("MainActivity.Location", "位置权限被拒绝")
+                // 弹窗，引导用户去设置页面开启位置权限
+                locationHelper?.showLocationSettingsDialog(this@MainActivity)
+            }
+        })
+
+        locationHelper?.setOnLocationErrorListener(object : LocationHelper.OnLocationErrorListener {
+            override fun onLocationError(errorMessage: String) {
+                Log.e("MainActivity.Location", "位置错误: $errorMessage")
             }
         })
         
-        // 检查并请求位置权限
-        if (!locationHelper.checkLocationPermission()) {
-            if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION)) {
-                locationHelper.showPermissionRationaleDialog(this, LocationHelper.LOCATION_PERMISSION_REQUEST_CODE)
-            } else {
-                locationHelper.requestLocationPermission(this, LocationHelper.LOCATION_PERMISSION_REQUEST_CODE)
-            }
-        } else {
-            // 已有权限，检查位置服务
-            if (locationHelper.isLocationServiceEnabled()) {
-                locationHelper.startLocationUpdates()
-            } else {
-                locationHelper.showLocationSettingsDialog(this)
-            }
-        }
+        // 一键启动位置服务（内部会处理权限请求和位置服务检查）
+        locationHelper?.startLocationService(this)
     }
     
     /**
@@ -549,19 +577,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         
-        if (requestCode == 100) { // 蓝牙权限请求码
-            val granted = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
-            
-            // 向H5发送权限状态
-            sendBluetoothPermissionStatus(granted)
-            
-            if (granted) {
-                // 权限已获取，重新启动蓝牙扫描
-                startBeaconScan()
-            } else {
-                // 显示提示
-                Toast.makeText(this, "没有蓝牙权限，无法扫描附近的蓝牙设备", Toast.LENGTH_SHORT).show()
-            }
+        // 将权限结果传递给LocationHelper
+        if (locationHelper?.onRequestPermissionsResult(requestCode, permissions, grantResults) == true) {
+            Log.d("MainActivity.Location", "位置权限结果已处理")
+            return
+        }
+        
+        // 将权限结果传递给BeaconScanner
+        if (beaconScanner?.onRequestPermissionsResult(requestCode, permissions, grantResults) == true) {
+            Log.d("MainActivity.Beacon", "蓝牙权限结果已处理")
+            return
         }
     }
     
