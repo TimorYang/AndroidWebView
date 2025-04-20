@@ -57,7 +57,7 @@ class WebSocketLogActivity : AppCompatActivity() {
         WebSocketLogManager.getInstance().getLogs().observe(this) { logs ->
             logAdapter.updateLogs(logs)
             if (logs.isNotEmpty()) {
-                logRecyclerView.scrollToPosition(logs.size - 1)
+                logRecyclerView.scrollToPosition(logs.size - 1) // 滚动到最新的日志（最后一条）
                 binding.emptyView.visibility = View.GONE
             } else {
                 binding.emptyView.visibility = View.VISIBLE

@@ -44,11 +44,11 @@ class WebSocketLogManager private constructor() {
      */
     fun addLog(type: LogType, message: String, details: String? = null) {
         val log = LogEntry(System.currentTimeMillis(), type, message, details ?: "")
-        logs.add(0, log) // Add to the beginning for newest first
+        logs.add(log) // Add to the end for chronological order (oldest first)
         
         // Trim log if it exceeds the maximum size
         if (logs.size > MAX_LOG_SIZE) {
-            logs.removeAt(logs.size - 1)
+            logs.removeAt(0) // Remove oldest entry
         }
         
         // Update LiveData
@@ -142,7 +142,7 @@ class WebSocketLogManager private constructor() {
      */
     fun exportLogsAsString(): String {
         val stringBuilder = StringBuilder()
-        logs.reversed().forEach { log ->
+        logs.forEach { log -> // No need to reverse since logs are already in chronological order
             stringBuilder.append(formatLogEntry(log))
             stringBuilder.append("\n\n")
         }
