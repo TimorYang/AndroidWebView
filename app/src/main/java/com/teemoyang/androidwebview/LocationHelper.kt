@@ -29,7 +29,7 @@ class LocationHelper(private val context: Context) {
     private var locationListener: LocationListener? = null
     private var onLocationUpdateListener: OnLocationUpdateListener? = null
     private var onLocationErrorListener: OnLocationErrorListener? = null
-    private var onPermissionCallback: OnPermissionCallback? = null
+    private var permissionCallback: OnPermissionCallback? = null
     private var onLocationServiceCallback: OnLocationServiceCallback? = null
     
     private var updateInterval: Long = 1000 // 默认1秒更新一次
@@ -135,7 +135,7 @@ class LocationHelper(private val context: Context) {
      * 设置权限回调
      */
     fun setOnPermissionCallback(callback: OnPermissionCallback): LocationHelper {
-        onPermissionCallback = callback
+        permissionCallback = callback
         return this
     }
     
@@ -192,7 +192,7 @@ class LocationHelper(private val context: Context) {
             }
             .setNegativeButton("取消") { dialog, _ ->
                 dialog.dismiss()
-                onPermissionCallback?.onPermissionDenied()
+                permissionCallback?.onPermissionDenied()
             }
             .setCancelable(false)
             .show()
@@ -226,10 +226,10 @@ class LocationHelper(private val context: Context) {
         if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 logInfo("位置权限已授予")
-                onPermissionCallback?.onPermissionGranted()
+                permissionCallback?.onPermissionGranted()
             } else {
                 logInfo("位置权限被拒绝")
-                onPermissionCallback?.onPermissionDenied()
+                permissionCallback?.onPermissionDenied()
             }
             return true
         }
@@ -382,7 +382,7 @@ class LocationHelper(private val context: Context) {
         logInfo("一键启动位置服务")
         
         // 设置默认权限回调（如果用户没有自定义）
-        if (onPermissionCallback == null) {
+        if (permissionCallback == null) {
             setOnPermissionCallback(object : OnPermissionCallback {
                 override fun onPermissionGranted() {
                     logInfo("位置权限已获取，检查位置服务...")
@@ -411,6 +411,9 @@ class LocationHelper(private val context: Context) {
         // 检查并请求权限
         if (!checkLocationPermission()) {
             logInfo("没有位置权限，请求授权...")
+            // 通知权限回调
+            permissionCallback?.onPermissionDenied()
+            
             if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION)) {
                 // 用户已经明确拒绝过权限，显示自定义权限说明对话框
                 showPermissionRationaleDialog(activity, LOCATION_PERMISSION_REQUEST_CODE)
@@ -420,6 +423,9 @@ class LocationHelper(private val context: Context) {
             }
         } else {
             logInfo("已有位置权限，检查位置服务...")
+            // 通知权限回调
+            permissionCallback?.onPermissionGranted()
+            
             // 已有权限，检查位置服务
             if (isLocationServiceEnabled()) {
                 startLocationUpdates()
@@ -479,7 +485,7 @@ class LocationHelper(private val context: Context) {
         locationManager = null
         onLocationUpdateListener = null
         onLocationErrorListener = null
-        onPermissionCallback = null
+        permissionCallback = null
         onLocationServiceCallback = null
     }
 } 

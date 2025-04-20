@@ -35,6 +35,13 @@ import org.altbeacon.beacon.BeaconParser
 import org.altbeacon.beacon.Region
 import android.app.AlertDialog
 import android.net.Uri
+import java.util.Collections
+import java.util.Timer
+import java.util.TimerTask
+import org.json.JSONArray
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.Date
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var webView: WebView
@@ -67,9 +74,48 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val SHAKE_THRESHOLD = 800 // 摇动阈值
     private val SHAKE_INTERVAL = 1000 // 两次摇动之间的最小间隔（毫秒）
     private var lastShakeTime: Long = 0
+    private var isSendBeaconData = false
     
     // 添加权限结果处理
     private var locationHelper: LocationHelper? = null
+    
+    // 添加一个成员变量来存储最新的位置信息
+    private var lastKnownLocation: Location? = null
+    
+    // 添加定时器变量，便于取消和重新启动
+    private var beaconTimer: Timer? = null
+    
+    // 添加UUID到编号的映射
+    private val uuidToCode = mapOf(
+        "FDA50693-A4E2-4FB1-AFCF-C6EB07647825" to "0000",
+        "1918FC80-B111-3441-A9AC-B1001C2FE510" to "0001",
+        "AB8190D5-D11E-4941-ACC4-42F30510B408" to "0002"
+    )
+    
+    // 上次发送beacon数据的时间
+    private var lastBeaconSendTime = 0L
+    
+    // 添加UUID到完整UUID值的映射
+    private val codeToUuid = mapOf(
+        "0000" to "FDA50693A4E24FB1AFCFC6EB07647825",
+        "0001" to "1918FC80B1113441A9ACB1001C2FE510",
+        "0002" to "AB8190D5D11E4941ACC442F30510B408"
+    )
+    
+    // 定位计数器
+    private var locateCount = 0
+    
+    // 添加字节转十六进制的工具方法
+    private fun byteToHex(bytes: ByteArray, length: Int): String {
+        val hexArray = "0123456789ABCDEF".toCharArray()
+        val hexChars = CharArray(length * 2)
+        for (i in 0 until length) {
+            val v = bytes[i].toInt() and 0xFF
+            hexChars[i * 2] = hexArray[v ushr 4]
+            hexChars[i * 2 + 1] = hexArray[v and 0x0F]
+        }
+        return String(hexChars)
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -256,11 +302,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     
     override fun onDestroy() {
         super.onDestroy()
+        // 停止信标扫描
+        beaconScanner?.release()
+        beaconScanner = null
         
         // 关闭WebSocket连接
         if (isWebSocketConnected) {
             webSocketManager.close()
         }
+        
+        // 取消定时器
+        beaconTimer?.cancel()
+        beaconTimer = null
+        
+        // 解注册传感器监听器
+        sensorManager.unregisterListener(this)
     }
     
     override fun onSensorChanged(event: SensorEvent) {
@@ -414,15 +470,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         
         // 1. 启动定位服务
         startLocationService()
-
-        // 2. 启动蓝牙扫描
-        startBeaconScan()
-            
-        // 3. 启动WiFi扫描
-        startWifiScan()
         
         // 通知全局数据管理器启动自动更新
         SensorDataManager.getInstance().startAutoUpdate()
+        
+        // 注意：tenSecondTimer现在在获取到位置权限后调用，而不是在这里
         
         Toast.makeText(this, "所有传感器扫描已启动", Toast.LENGTH_SHORT).show()
     }
@@ -437,7 +489,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             .setEnableVerboseLogging(false)  // 控制日志输出
             .setAutoUpdateToSensorManager(true) // 自动更新到SensorDataManager
             
-        // 可选：设置自定义监听器，监听位置更新
+        // 修改位置更新监听器
         locationHelper?.setOnLocationUpdateListener(object : LocationHelper.OnLocationUpdateListener {
             override fun onLocationUpdated(location: Location) {
                 Log.d("MainActivity.Location", "位置已更新: ${location.latitude}, ${location.longitude}")
@@ -445,16 +497,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         })
         
-        // 可选：自定义权限拒绝处理
+        // 修改位置权限回调
         locationHelper?.setOnPermissionCallback(object : LocationHelper.OnPermissionCallback {
             override fun onPermissionGranted() {
                 Log.d("MainActivity.Location", "位置权限已授予")
+                // 启动蓝牙扫描
+                startBeaconScan()
+                // 启动WiFi扫描
+                startWifiScan()
+                // 在获取位置权限后启动10秒的定时任务
+                tenSecondTimer()
             }
             
             override fun onPermissionDenied() {
                 Log.e("MainActivity.Location", "位置权限被拒绝")
                 // 弹窗，引导用户去设置页面开启位置权限
-                locationHelper?.showLocationSettingsDialog(this@MainActivity)
+//                locationHelper?.showLocationSettingsDialog(this@MainActivity)
             }
         })
 
@@ -472,78 +530,58 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      * 启动蓝牙扫描
      */
     private fun startBeaconScan() {
-        Log.d("MainActivity", "启动蓝牙信标扫描")
+        Log.d("MainActivity.Beacon", "启动蓝牙信标扫描")
         
         try {
-            // 检查蓝牙权限
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED) {
-                // 有权限，执行蓝牙扫描
-                Log.d("MainActivity", "蓝牙权限已获取，开始扫描信标")
-                
-                // 向H5发送权限状态
-                sendBluetoothPermissionStatus(true)
-                
-                // 使用BeaconManager进行扫描
-                val beaconManager = BeaconManager.getInstanceForApplication(this)
-                
-                // 添加解析器，支持多种格式
-                // iBeacon格式
-                beaconManager.beaconParsers.add(BeaconParser().setBeaconLayout("m:2-3=0215,i:4-19,i:20-21,i:22-23,p:24-24"))
-                // Eddystone UID格式
-                beaconManager.beaconParsers.add(BeaconParser().setBeaconLayout("s:0-1=feaa,m:2-2=00,p:3-3:-41,i:4-13,i:14-19"))
-                // Eddystone URL格式
-                beaconManager.beaconParsers.add(BeaconParser().setBeaconLayout("s:0-1=feaa,m:2-2=10,p:3-3:-41,i:4-20v"))
-                
-                // 设置前台扫描周期 (1秒扫描，0秒休息)
-                beaconManager.foregroundScanPeriod = 1000L
-                beaconManager.foregroundBetweenScanPeriod = 0L
-                
-                // 应用扫描设置
-                beaconManager.updateScanPeriods()
-                
-                // 添加监听器
-                beaconManager.addRangeNotifier { beacons, _ ->
-                    // 记录发现的信标数量
-                    Log.d("MainActivity", "发现 ${beacons.size} 个信标")
+            // 在需要使用时创建和初始化BeaconScanner
+            beaconScanner = BeaconScanner(this)
+            // 初始化BeaconScanner
+            beaconScanner?.initialize()
+            
+            // 设置扫描监听器
+            beaconScanner?.setScanListener(object : BeaconScanner.ScanListener {
+                override fun onBeaconFound(beaconCollection: Collection<Beacon>) {
+                    // 更新到SensorDataManager
+                    SensorDataManager.getInstance().updateBeaconData(beaconCollection)
                     
-                    if (beacons.isNotEmpty()) {
-                        // 将信标数据更新到SensorDataManager
-                        SensorDataManager.getInstance().updateBeaconData(beacons)
-                        
-                        // 查看第一个信标的信息
-                        val firstBeacon = beacons.first()
-                        Log.d("MainActivity", "信标详情: MAC=${firstBeacon.bluetoothAddress}, " +
-                                "UUID=${firstBeacon.id1}, " +
-                                "Major=${firstBeacon.id2}, " +
-                                "Minor=${firstBeacon.id3}, " +
-                                "RSSI=${firstBeacon.rssi}, " +
-                                "距离=${firstBeacon.distance}米")
+                    // 设置标志，表示已收到beacon数据
+                    isSendBeaconData = true
+                    
+                    // 发送beacon数据到WebSocket
+                    sendBeaconData()
+                    
+                    // 重新启动10秒定时器
+                    tenSecondTimer()
+                    
+                    // 记录发现的信标信息
+                    beaconCollection.forEach { beacon ->
+                        Log.d("MainActivity.Beacon", "信标详情: MAC=${beacon.bluetoothAddress}, " +
+                                "UUID=${beacon.id1}, " +
+                                "Major=${beacon.id2}, " +
+                                "Minor=${beacon.id3}, " +
+                                "RSSI=${beacon.rssi}, " +
+                                "距离=${beacon.distance}米")
                     }
                 }
                 
-                // 开始扫描 (扫描所有信标，无过滤)
-                val region = Region("allBeaconsRegion", null, null, null)
-                beaconManager.startRangingBeacons(region)
+                override fun onScanStart() {
+                    Log.d("MainActivity.Beacon", "信标扫描已启动")
+                }
                 
-                Log.d("MainActivity", "信标扫描已启动")
-            } else {
-                // 请求蓝牙权限
-                Log.d("MainActivity", "请求蓝牙权限")
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(
-                        Manifest.permission.BLUETOOTH_SCAN,
-                        Manifest.permission.BLUETOOTH_CONNECT,
-                        Manifest.permission.ACCESS_FINE_LOCATION
-                    ),
-                    100
-                )
-            }
+                override fun onScanStop() {
+                    Log.d("MainActivity.Beacon", "信标扫描已停止")
+                }
+                
+                override fun onError(message: String) {
+                    Log.e("MainActivity.Beacon", "信标扫描错误: $message")
+                }
+            })
+            
+            // 开始扫描 (startScan方法内会自动处理权限检查和请求)
+            beaconScanner?.startScan()
         } catch (e: Exception) {
-            Log.e("MainActivity", "启动蓝牙扫描失败: ${e.message}")
+            Log.e("MainActivity.Beacon", "启动蓝牙扫描失败: ${e.message}")
             e.printStackTrace()
-            // 发送权限状态为false
-            sendBluetoothPermissionStatus(false)
         }
     }
     
@@ -584,9 +622,29 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         
         // 将权限结果传递给BeaconScanner
-        if (beaconScanner?.onRequestPermissionsResult(requestCode, permissions, grantResults) == true) {
-            Log.d("MainActivity.Beacon", "蓝牙权限结果已处理")
+        if (beaconScanner != null && beaconScanner?.handlePermissionResult(requestCode, permissions, grantResults) == true) {
+            Log.d("MainActivity", "蓝牙权限已获取，继续扫描")
             return
+        }
+        
+        // 处理蓝牙权限请求结果（如果BeaconScanner为null时的备选处理）
+        if (requestCode == BeaconScanner.PERMISSION_REQUEST_CODE) { // 蓝牙权限请求码
+            if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                Log.d("MainActivity", "蓝牙权限已获取，启动扫描")
+                startBeaconScan()
+            } else {
+                Log.e("MainActivity", "蓝牙权限被拒绝")
+            }
+        }
+    }
+    
+    // 添加onActivityResult来处理蓝牙开启请求结果
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        
+        // 处理蓝牙开启结果
+        if (requestCode == BeaconScanner.BLUETOOTH_ENABLE_REQUEST_CODE) {
+            beaconScanner?.handleBluetoothEnableResult(requestCode, resultCode)
         }
     }
     
@@ -594,13 +652,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      * 启动WiFi扫描
      */
     private fun startWifiScan() {
-        Log.d("MainActivity", "启动WiFi扫描")
+        Log.d("MainActivity.WiFi", "启动WiFi扫描")
         val wifiHelper = WiFiHelper(this)
         
         // 设置WiFi扫描结果监听器
         wifiHelper.setOnScanResultListener(object : WiFiHelper.OnScanResultListener {
             override fun onScanResult(results: List<ScanResult>) {
-                Log.d("MainActivity", "WiFi扫描结果: ${results.size}个网络")
+                Log.d("MainActivity.WiFi", "WiFi扫描结果: ${results.size}个网络")
                 // 更新到全局数据管理器
                 SensorDataManager.getInstance().updateWifiScanResults(results)
             }
@@ -631,7 +689,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
             
             override fun onPermissionDenied() {
-                Log.e("MainActivity", "WiFi扫描权限被拒绝")
+                Log.e("MainActivity.WiFi", "WiFi扫描权限被拒绝")
             }
         })
         
@@ -654,4 +712,186 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
     }
+
+    private fun tenSecondTimer() {
+        Log.d("MainActivity.tasktimer", "启动10秒定时检查")
+        
+        // 取消已有的定时器
+        beaconTimer?.cancel()
+        
+        // 创建新的定时器
+        beaconTimer = Timer()
+        
+        // 创建定时任务，10秒后执行一次
+        beaconTimer?.schedule(object : TimerTask() {
+            override fun run() {
+                if (!isSendBeaconData) {
+                    // 如果10秒内没有收到beacon数据，发送GPS数据
+                    Log.d("MainActivity.tasktimer", "10秒内未收到Beacon数据，发送GPS数据")
+                    sendLocationData()
+                } 
+                // 重置标志，为下一次检测做准备
+                isSendBeaconData = false
+                
+                // 重新启动定时器以继续监听
+                tenSecondTimer()
+            }
+        }, 10000) // 10秒后执行一次
+    }
+
+    private fun sendLocationData() {
+        try {
+            // 从SensorDataManager获取最新位置数据
+            val location = SensorDataManager.getInstance().getCurrentLocation() ?: return
+            
+            // 发送位置数据到H5
+            val locationObj = JSONObject().apply {
+                put("latitude", location.latitude)
+                put("longitude", location.longitude)
+                put("accuracy", location.accuracy)
+            }
+            
+            // 创建与JS示例相同的数据结构 { "location": obj }
+            val dataObj = JSONObject().apply {
+                put("locateGpsHttpData", locationObj)
+            }
+            
+            // 发送到服务端 (类型"1", 接收者"Engine")
+            if (webSocketManager.isConnected()) {
+                val success = webSocketManager.webSocketSend("1", "Engine", dataObj)
+                if (success) {
+                    Log.d("MainActivity.webSocket.sendMessage", "GPS位置数据发送成功")
+                } else {
+                    Log.e("MainActivity.webSocket.sendMessage", "GPS位置数据发送失败")
+                }
+            } else {
+                Log.e("MainActivity.webSocket.sendMessage", "WebSocket未连接，无法发送GPS数据")
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity.webSocket.sendMessage", "发送GPS位置数据出错: ${e.message}")
+        }
+    }
+
+    private fun sendBeaconData() {
+        try {
+            // 从SensorDataManager获取最新的Beacon数据
+            val beacons = SensorDataManager.getInstance().getBeaconData()
+            if (beacons.isEmpty()) {
+                Log.d("MainActivity.webSocket.sendMessage", "没有可用的Beacon数据")
+                return
+            }
+            
+            // 在方法内定义rssiBeaconMap
+            val rssiBeaconMap = mutableMapOf<String, Int>()
+            
+            // 处理每个beacon
+            for (beacon in beacons) {
+                // 检查RSSI值是否在有效范围内
+                val rssi = beacon.rssi
+                if (rssi < 0 && rssi > -95) {
+                    val uuidStr = beacon.id1.toString().toUpperCase()
+                    val code = uuidToCode[uuidStr]
+                    
+                    if (code != null) {
+                        // 获取major和minor
+                        val majorInt = beacon.id2.toString().toInt()
+                        val minorInt = beacon.id3.toString().toInt()
+                        
+                        // 转换为字节数组
+                        val majorBytes = ByteArray(2)
+                        majorBytes[0] = ((majorInt shr 8) and 0xFF).toByte()
+                        majorBytes[1] = (majorInt and 0xFF).toByte()
+                        
+                        val minorBytes = ByteArray(2)
+                        minorBytes[0] = ((minorInt shr 8) and 0xFF).toByte()
+                        minorBytes[1] = (minorInt and 0xFF).toByte()
+                        
+                        // 转换为十六进制
+                        val majorHex = byteToHex(majorBytes, 2)
+                        val minorHex = byteToHex(minorBytes, 2)
+                        
+                        // 生成MAC地址
+                        val mac = code + majorHex + minorHex
+                        
+                        // 存储或更新RSSI值
+                        val currentRssi = rssiBeaconMap[mac.toUpperCase()]
+                        if (currentRssi == null || rssi > currentRssi) {
+                            rssiBeaconMap[mac.toUpperCase()] = rssi
+                        }
+                    }
+                }
+            }
+            
+            if (rssiBeaconMap.isNotEmpty()) {
+                // 创建Beacon数组
+                val didArray = JSONArray()
+                
+                // 遍历rssiBeaconMap，生成JSON对象
+                for ((mac, rssiValue) in rssiBeaconMap) {
+                    val obj = JSONObject()
+                    obj.put("id", mac)
+                    obj.put("rssi", rssiValue)
+                    didArray.put(obj)
+                }
+                
+                // 创建map数组
+                val mapArray = JSONArray()
+                for ((code, uuid) in codeToUuid) {
+                    val mapObj = JSONObject()
+                    mapObj.put("key", code)
+                    mapObj.put("value", uuid)
+                    mapArray.put(mapObj)
+                }
+                
+                // 获取时间戳和格式化时间
+                val timestamp = System.currentTimeMillis()
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                val currentDate = dateFormat.format(Date(timestamp))
+                
+                // 增加定位计数
+                locateCount++
+                
+                // 创建完整的定位请求数据
+                val locateJsonObj = JSONObject().apply {
+                    put("deviceId", DeviceManager.getInstance().getDeviceId())
+                    put("did", didArray)
+                    put("map", mapArray)
+                    put("mac", JSONArray())  // 空数组
+                    put("acceleration", JSONArray())  // 空数组
+                    put("orientation", JSONArray())  // 空数组
+                    put("locateCount", locateCount)
+                    put("currentDate", currentDate)
+                    put("magnetic", JSONArray())  // 空数组
+                    
+                    // 添加传感器信息
+                    val sensorInfoObj = JSONObject().apply {
+                        put("isSensorValid", "1")  // 传感器有效
+                        put("step", "0")  // 默认步数
+                        put("isMoving", "0")  // 默认不移动
+                        put("compassValue", "0")  // 默认指南针值
+                    }
+                    put("sensorInfo", sensorInfoObj)
+                    
+                    put("timestamp", timestamp)
+                    put("time", currentDate)
+                }
+                
+                // 发送到服务端
+                if (webSocketManager.isConnected()) {
+                    val success = webSocketManager.webSocketSend("1", "Engine", locateJsonObj)
+                    if (success) {
+                        Log.d("MainActivity.webSocket.sendMessage", "定位数据发送成功: ${didArray.length()}个信标")
+                    } else {
+                        Log.e("MainActivity.webSocket.sendMessage", "定位数据发送失败")
+                    }
+                } else {
+                    Log.e("MainActivity.webSocket.sendMessage", "WebSocket未连接，无法发送定位数据")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity.webSocket.sendMessage", "处理Beacon数据出错: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+    
 } 

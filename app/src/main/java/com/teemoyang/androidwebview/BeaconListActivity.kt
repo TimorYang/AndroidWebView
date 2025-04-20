@@ -35,16 +35,6 @@ class BeaconListActivity : AppCompatActivity() {
     private val TAG = "BeaconListActivity"
     private val ALL_BEACONS_REGION = Region("allBeacons", null, null, null)
     private var isScanning = false
-    
-    // 模拟信标生成器
-    private val mockBeaconGenerator = MockBeaconGenerator()
-    
-    // 模拟数据处理
-    private val mockHandler = Handler(Looper.getMainLooper())
-    private val MOCK_DATA_INTERVAL = 1000L // 1秒更新一次
-    
-    // 是否使用模拟数据
-    private var useMockData = false
 
     // 注册权限请求ActivityResultLauncher
     private val requestMultiplePermissions = registerForActivityResult(
@@ -88,7 +78,6 @@ class BeaconListActivity : AppCompatActivity() {
 
         setupUI()
         setupBeaconManager()
-        setupMockBeaconGenerator() // 设置模拟信标生成器
     }
 
     private fun setupUI() {
@@ -100,107 +89,23 @@ class BeaconListActivity : AppCompatActivity() {
 
         binding.switchScan.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
-                if (useMockData) {
-                    startMockBeaconGeneration()
-                } else {
-                    checkBluetoothAndPermissions()
-                }
+                checkBluetoothAndPermissions()
             } else {
-                if (useMockData) {
-                    stopMockBeaconGeneration()
-                } else {
-                    stopBeaconScanning()
-                }
+                stopBeaconScanning()
             }
-        }
-        
-        // 添加长按功能，切换真实/模拟模式
-        binding.switchScan.setOnLongClickListener {
-            useMockData = !useMockData
-            
-            // 如果当前正在扫描，先停止
-            if (binding.switchScan.isChecked) {
-                if (!useMockData) {
-                    stopMockBeaconGeneration()
-                    checkBluetoothAndPermissions()
-                } else {
-                    stopBeaconScanning()
-                    startMockBeaconGeneration()
-                }
-            }
-            
-            // 提示用户当前模式
-            val modeText = if (useMockData) "模拟数据模式" else "真实扫描模式"
-            binding.tvScanStatus.text = "已切换到$modeText"
-            Toast.makeText(this, "已切换到$modeText", Toast.LENGTH_SHORT).show()
-            
-            true
         }
 
         binding.fabSettings.setOnClickListener {
-            // 切换模拟/真实模式
-            val options = arrayOf("真实扫描模式", "模拟数据模式")
-            val currentMode = if (useMockData) 1 else 0
-            
+            // 这里可以添加其他设置选项
             AlertDialog.Builder(this)
-                .setTitle("选择扫描模式")
-                .setSingleChoiceItems(options, currentMode) { dialog, which ->
-                    val newUseMockData = which == 1
-                    
-                    // 如果模式改变了
-                    if (useMockData != newUseMockData) {
-                        useMockData = newUseMockData
-                        
-                        // 如果当前正在扫描，需要重启扫描
-                        if (binding.switchScan.isChecked) {
-                            if (useMockData) {
-                                stopBeaconScanning()
-                                startMockBeaconGeneration()
-                            } else {
-                                stopMockBeaconGeneration()
-                                checkBluetoothAndPermissions()
-                            }
-                        }
-                        
-                        // 提示用户
-                        val modeText = if (useMockData) "模拟数据模式" else "真实扫描模式"
-                        binding.tvScanStatus.text = "已切换到$modeText"
-                        Toast.makeText(this, "已切换到$modeText", Toast.LENGTH_SHORT).show()
-                    }
-                    
-                    dialog.dismiss()
-                }
+                .setTitle("扫描设置")
+                .setMessage("更多扫描设置功能敬请期待")
+                .setPositiveButton("确定", null)
                 .show()
         }
 
         // 初始状态下空视图显示，RecyclerView隐藏
         updateEmptyView(true)
-    }
-    
-    // 模拟数据生成的Runnable
-    private val mockRunnable = object : Runnable {
-        override fun run() {
-            if (!isScanning || !useMockData) return
-            
-            mockHandler.postDelayed(this, MOCK_DATA_INTERVAL)
-        }
-    }
-    
-    // 设置模拟信标生成器
-    private fun setupMockBeaconGenerator() {
-        mockBeaconGenerator.setListener(object : MockBeaconGenerator.MockBeaconListener {
-            override fun onBeaconDetected(beacon: org.altbeacon.beacon.Beacon) {
-                runOnUiThread {
-                    // 更新适配器
-                    beaconAdapter.updateBeacon(beacon)
-                    
-                    // 更新计数和空视图
-                    val beaconCount = beaconAdapter.getBeacons().size
-                    binding.tvBeaconCount.text = "发现设备: $beaconCount"
-                    updateEmptyView(beaconCount == 0)
-                }
-            }
-        })
     }
 
     private fun setupBeaconManager() {
@@ -249,21 +154,25 @@ class BeaconListActivity : AppCompatActivity() {
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         val bluetoothAdapter = bluetoothManager.adapter
 
-        // Check if Bluetooth is supported
         if (bluetoothAdapter == null) {
-            Toast.makeText(this, "此设备不支持蓝牙", Toast.LENGTH_LONG).show()
+            // 设备不支持蓝牙
+            Toast.makeText(this, "此设备不支持蓝牙", Toast.LENGTH_SHORT).show()
             binding.switchScan.isChecked = false
             return
         }
 
-        // Check if Bluetooth is enabled
         if (!bluetoothAdapter.isEnabled) {
+            // 请求用户打开蓝牙
             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
             enableBluetoothLauncher.launch(enableBtIntent)
             return
         }
 
-        // Check permissions
+        // 检查所需权限
+        checkAndRequestPermissions()
+    }
+
+    private fun checkAndRequestPermissions() {
         val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             arrayOf(
                 Manifest.permission.BLUETOOTH_SCAN,
@@ -272,191 +181,87 @@ class BeaconListActivity : AppCompatActivity() {
             )
         } else {
             arrayOf(
+                Manifest.permission.BLUETOOTH,
+                Manifest.permission.BLUETOOTH_ADMIN,
                 Manifest.permission.ACCESS_FINE_LOCATION
             )
         }
 
         val missingPermissions = requiredPermissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
+        }.toTypedArray()
 
         if (missingPermissions.isNotEmpty()) {
-            // Request missing permissions
-            requestMultiplePermissions.launch(missingPermissions.toTypedArray())
+            // 请求缺少的权限
+            requestMultiplePermissions.launch(missingPermissions)
         } else {
-            // All permissions granted, proceed with scanning
-            startBeaconScanning()
+            // 已有所有权限，开始扫描
+            startScan()
         }
     }
 
-    private fun startBeaconScanning() {
-        if (isScanning) return
-        
-        if (!hasRequiredPermissions()) {
-            requestPermissions()
-            return
+    private fun checkBluetoothStatus(): Boolean {
+        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        val bluetoothAdapter = bluetoothManager.adapter
+
+        return if (bluetoothAdapter != null && bluetoothAdapter.isEnabled) {
+            true
+        } else {
+            binding.switchScan.isChecked = false
+            Toast.makeText(this, "蓝牙未启用，无法扫描", Toast.LENGTH_SHORT).show()
+            false
         }
+    }
+
+    private fun startScan() {
+        if (isScanning) return
         
         try {
             beaconManager.startRangingBeacons(ALL_BEACONS_REGION)
-            binding.switchScan.isChecked = true
-            binding.tvScanStatus.text = "扫描中..."
             isScanning = true
+            binding.tvScanStatus.text = "正在扫描..."
             
-            // 更新空视图状态
-            updateEmptyView(beaconAdapter.itemCount == 0)
-        } catch (e: Exception) {
-            Log.e(TAG, "开始扫描失败: ${e.message}", e)
-            Toast.makeText(this, "开始扫描失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            Log.d(TAG, "开始扫描蓝牙信标")
+        } catch (e: RemoteException) {
+            Log.e(TAG, "开始扫描时出错: ${e.message}")
+            Toast.makeText(this, "扫描启动失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            binding.switchScan.isChecked = false
         }
     }
 
     private fun stopBeaconScanning() {
-        try {
-            beaconManager.stopRangingBeacons(ALL_BEACONS_REGION)
-            isScanning = false
-            binding.tvScanStatus.text = "未扫描"
-            Log.d(TAG, "Stopped ranging beacons")
-        } catch (e: RemoteException) {
-            Log.e(TAG, "Failed to stop ranging beacons", e)
-        }
-    }
-    
-    private fun startMockBeaconGeneration() {
-        if (isScanning) return
-        
-        // 设置模拟数据生成
-        isScanning = true
-        binding.switchScan.isChecked = true
-        binding.tvScanStatus.text = "使用模拟数据中..."
-        
-        // 开始生成模拟数据
-        mockBeaconGenerator.startGenerating(8) // 生成8个模拟信标
-        
-        // 更新空视图状态
-        updateEmptyView(beaconAdapter.itemCount == 0)
-    }
-    
-    private fun stopMockBeaconGeneration() {
-        mockBeaconGenerator.stopGenerating()
-        isScanning = false
-        binding.tvScanStatus.text = "未扫描"
-        Log.d(TAG, "Stopped generating mock beacons")
-    }
-
-    // 开始扫描
-    private fun startScan() {
-        // 根据是否使用模拟数据决定启动哪种扫描方式
-        if (!useMockData) {
-            startBeaconScanning()
-        } else {
-            startMockBeaconGeneration()
-        }
-    }
-    
-    // 停止扫描
-    private fun stopScan() {
         if (!isScanning) return
         
         try {
-            if (useMockData) {
-                stopMockBeaconGeneration()
-            } else {
-                stopBeaconScanning()
-            }
-            binding.switchScan.isChecked = false
+            beaconManager.stopRangingBeacons(ALL_BEACONS_REGION)
             isScanning = false
-            updateEmptyView(true)
-        } catch (e: Exception) {
-            Log.e(TAG, "停止扫描失败: ${e.message}", e)
-            Toast.makeText(this, "停止扫描失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            binding.tvScanStatus.text = "扫描已停止"
+            
+            Log.d(TAG, "停止扫描蓝牙信标")
+        } catch (e: RemoteException) {
+            Log.e(TAG, "停止扫描时出错: ${e.message}")
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (binding.switchScan.isChecked && !isScanning) {
+            checkBluetoothAndPermissions()
         }
     }
 
     override fun onPause() {
         super.onPause()
         if (isScanning) {
-            if (useMockData) {
-                stopMockBeaconGeneration()
-            } else {
-                stopBeaconScanning()
-            }
+            stopBeaconScanning()
+            // 注意：我们保持开关的状态，以便在返回活动时恢复扫描
         }
-        binding.switchScan.isChecked = false
     }
 
     override fun onDestroy() {
         super.onDestroy()
         if (isScanning) {
-            if (useMockData) {
-                stopMockBeaconGeneration()
-            } else {
-                stopBeaconScanning()
-            }
+            stopBeaconScanning()
         }
-        mockHandler.removeCallbacksAndMessages(null)
-    }
-
-    // 检查是否有所需权限
-    private fun hasRequiredPermissions(): Boolean {
-        val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(
-                Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-        } else {
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-        }
-        
-        return requiredPermissions.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
-    }
-    
-    // 请求所需权限
-    private fun requestPermissions() {
-        val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(
-                Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-        } else {
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-        }
-        
-        val missingPermissions = requiredPermissions.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        
-        if (missingPermissions.isNotEmpty()) {
-            requestMultiplePermissions.launch(missingPermissions.toTypedArray())
-        }
-    }
-    
-    // 检查蓝牙状态
-    private fun checkBluetoothStatus(): Boolean {
-        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        val bluetoothAdapter = bluetoothManager.adapter
-        
-        // 检查设备是否支持蓝牙
-        if (bluetoothAdapter == null) {
-            Toast.makeText(this, "此设备不支持蓝牙", Toast.LENGTH_SHORT).show()
-            return false
-        }
-        
-        // 检查蓝牙是否已启用
-        if (!bluetoothAdapter.isEnabled) {
-            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-            enableBluetoothLauncher.launch(enableBtIntent)
-            return false
-        }
-        
-        return true
     }
 } 
