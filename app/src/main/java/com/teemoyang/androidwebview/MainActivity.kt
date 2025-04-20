@@ -60,8 +60,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val WS_BASE_DOMAIN = "navmobiletest.joysuch.com"  // 不含协议的域名
     private val WS_PATH = "/locationEngine/websocket/"  // WebSocket路径
     
-    // WebSocket相关
-    private val webSocketManager = WebSocketManager()
+    // 使用单例模式
+    private val webSocketManager by lazy { WebSocketManager.getInstance() }
     private var isWebSocketConnected = false
     
     // 传感器相关
@@ -339,7 +339,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 if (speed > SHAKE_THRESHOLD && (currentTime - lastShakeTime > SHAKE_INTERVAL)) {
                     lastShakeTime = currentTime
                     
-                    // 检测到摇动，打开WebSocket测试页面
+                    // 检测到摇动，打开WebSocket日志页面
                     onShakeDetected()
                 }
                 
@@ -356,10 +356,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     
     private fun onShakeDetected() {
         // 显示提示
-        Toast.makeText(this, "检测到摇动，打开WebSocket测试页面", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "检测到摇动，打开WebSocket日志页面", Toast.LENGTH_SHORT).show()
         
-        // 启动WebSocket测试Activity
-        val intent = Intent(this, WebSocketTestActivity::class.java)
+        // 启动WebSocket日志Activity
+        val intent = Intent(this, WebSocketLogActivity::class.java)
         startActivity(intent)
     }
 
@@ -410,28 +410,24 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun initButtons() {
-        val btnWebsocketTest = findViewById<Button>(R.id.btnWebsocketTest)
-        btnWebsocketTest.setOnClickListener {
-            val intent = Intent(this, WebSocketTestActivity::class.java)
-            startActivity(intent)
-        }
-
-        val btnBeaconScan = findViewById<Button>(R.id.btnBeaconScan)
-        btnBeaconScan.setOnClickListener {
-            val intent = Intent(this, BeaconScanActivity::class.java)
-            startActivity(intent)
+        // 设置信标扫描按钮
+        binding.btnBeaconScan.setOnClickListener {
+            startActivity(Intent(this, BeaconScanActivity::class.java))
         }
         
-        val btnWifiScan = findViewById<Button>(R.id.btnWifiScan)
-        btnWifiScan.setOnClickListener {
-            val intent = Intent(this, WiFiScanActivity::class.java)
-            startActivity(intent)
+        // 设置WiFi扫描按钮
+        binding.btnWifiScan.setOnClickListener {
+            startActivity(Intent(this, WiFiScanActivity::class.java))
         }
         
-        val btnAccelerometer = findViewById<Button>(R.id.btnAccelerometer)
-        btnAccelerometer.setOnClickListener {
-            val intent = Intent(this, AccelerometerActivity::class.java)
-            startActivity(intent)
+        // 设置加速度计按钮
+        binding.btnAccelerometer.setOnClickListener {
+            startActivity(Intent(this, AccelerometerActivity::class.java))
+        }
+        
+        // 设置WebSocket测试按钮
+        binding.btnWebSocketTest.setOnClickListener {
+            startActivity(Intent(this, WebSocketTestActivity::class.java))
         }
     }
 
@@ -856,22 +852,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     put("deviceId", DeviceManager.getInstance().getDeviceId())
                     put("did", didArray)
                     put("map", mapArray)
-                    put("mac", JSONArray())  // 空数组
-                    put("acceleration", JSONArray())  // 空数组
-                    put("orientation", JSONArray())  // 空数组
                     put("locateCount", locateCount)
                     put("currentDate", currentDate)
-                    put("magnetic", JSONArray())  // 空数组
-                    
-                    // 添加传感器信息
-                    val sensorInfoObj = JSONObject().apply {
-                        put("isSensorValid", "1")  // 传感器有效
-                        put("step", "0")  // 默认步数
-                        put("isMoving", "0")  // 默认不移动
-                        put("compassValue", "0")  // 默认指南针值
-                    }
-                    put("sensorInfo", sensorInfoObj)
-                    
                     put("timestamp", timestamp)
                     put("time", currentDate)
                 }

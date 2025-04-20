@@ -7,4 +7,25 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    
+    <!-- WebSocket日志颜色 -->
+    <color name="gray">#757575</color>
+    <color name="blue">#2196F3</color>
+    <color name="purple">#9C27B0</color>
+    <color name="green">#4CAF50</color>
+    <color name="red">#F44336</color>
+    
+    <!-- WebSocket日志背景颜色 -->
+    <color name="logInfoBackground">#E0F7FA</color>
+    <color name="logErrorBackground">#FFEBEE</color>
+    <color name="logSendBackground">#E8F5E9</color>
+    <color name="logReceiveBackground">#FFF9C4</color>
+    <color name="logConnectionBackground">#E8EAF6</color>
+    
+    <!-- WebSocket日志文本颜色 -->
+    <color name="log_info">@color/blue</color>
+    <color name="log_error">@color/red</color>
+    <color name="log_send">@color/green</color>
+    <color name="log_receive">@color/purple</color>
+    <color name="log_connection">@color/gray</color>
 </resources>

@@ -48,6 +48,8 @@ class WebSocketManager {
         }
         
         Log.d(TAG, "连接WebSocket: $wsUrl")
+        // 记录连接尝试
+        WebSocketLogManager.getInstance().addLog(WebSocketLogManager.LogType.INFO, "连接WebSocket", wsUrl)
         
         // 创建OkHttpClient
         client = OkHttpClient.Builder()
@@ -64,6 +66,9 @@ class WebSocketManager {
                 isConnected = true
                 reconnectCount = 0 // 重置重连计数
                 cancelReconnect() // 取消任何待执行的重连任务
+                
+                // 记录连接成功
+                WebSocketLogManager.getInstance().logConnectionState(true, wsUrl)
             }
             
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -71,8 +76,14 @@ class WebSocketManager {
                 try {
                     val jsonObject = JSONObject(text)
                     callback.onMessage(jsonObject)
+                    
+                    // 记录接收到的消息
+                    WebSocketLogManager.getInstance().logReceive(text)
                 } catch (e: Exception) {
                     Log.e(TAG, "解析消息失败: ${e.message}")
+                    
+                    // 记录解析错误
+                    WebSocketLogManager.getInstance().logError("解析消息失败", e)
                 }
             }
             
@@ -80,11 +91,17 @@ class WebSocketManager {
                 Log.d(TAG, "连接关闭中: $code, $reason")
                 isConnected = false
                 callback.onClose()
+                
+                // 记录连接正在关闭
+                WebSocketLogManager.getInstance().addLog(WebSocketLogManager.LogType.CONNECTION, "连接关闭中", "代码=$code, 原因=$reason")
             }
             
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "连接已关闭: $code, $reason")
                 isConnected = false
+                
+                // 记录连接已关闭
+                WebSocketLogManager.getInstance().logConnectionState(false, "代码=$code, 原因=$reason")
                 
                 // 如果是正常关闭则不重连
                 if (code == 1000 && reason == "正常关闭") {
@@ -118,14 +135,24 @@ class WebSocketManager {
                         }
                         
                         callback.onError(errorDetail.toString())
+                        
+                        // 记录连接失败
+                        WebSocketLogManager.getInstance().logError(errorDetail.toString(), t)
                         return@onFailure
                     } catch (e: Exception) {
                         Log.e(TAG, "无法读取响应体: ${e.message}")
+                        
+                        // 记录错误
+                        WebSocketLogManager.getInstance().logError("无法读取响应体", e)
                     }
                 }
                 
                 isConnected = false
-                callback.onError("连接错误: ${t.message ?: "未知错误"}")
+                val errorMsg = "连接错误: ${t.message ?: "未知错误"}"
+                callback.onError(errorMsg)
+                
+                // 记录连接错误
+                WebSocketLogManager.getInstance().logError(errorMsg, t)
                 
                 // 连接失败时尝试重连
                 if (enableReconnect) {
@@ -150,6 +177,9 @@ class WebSocketManager {
         message.put("from", deviceId)
         message.put("data", data)
         
+        // 记录发送的消息
+        WebSocketLogManager.getInstance().logSend(message.toString())
+        
         return sendMessage(message.toString())
     }
     
@@ -160,6 +190,9 @@ class WebSocketManager {
             return webSocket!!.send(message)
         }
         Log.e(TAG, "发送消息失败：WebSocket未连接")
+        
+        // 记录发送失败
+        WebSocketLogManager.getInstance().logError("发送消息失败：WebSocket未连接")
         return false
     }
     
@@ -168,6 +201,7 @@ class WebSocketManager {
         enableReconnect = false // 禁用重连
         cancelReconnect() // 取消待执行的重连
         
+        WebSocketLogManager.getInstance().addLog(WebSocketLogManager.LogType.INFO, "正在关闭WebSocket连接")
         webSocket?.close(1000, "正常关闭")
         webSocket = null
         client = null
@@ -194,6 +228,10 @@ class WebSocketManager {
         }
         
         Log.d(TAG, "发送WebSocket消息: $message")
+        
+        // 记录发送的消息
+        WebSocketLogManager.getInstance().logSend(message.toString())
+        
         return sendMessage(message.toString())
     }
     
@@ -206,6 +244,8 @@ class WebSocketManager {
     fun setEnableReconnect(enable: Boolean) {
         this.enableReconnect = enable
         
+        WebSocketLogManager.getInstance().addLog(WebSocketLogManager.LogType.INFO, "自动重连功能已" + (if (enable) "启用" else "禁用"))
+        
         if (!enable) {
             cancelReconnect()
         }
@@ -215,6 +255,7 @@ class WebSocketManager {
     private fun scheduleReconnect() {
         if (reconnectCount >= maxReconnectAttempts) {
             Log.w(TAG, "已达到最大重连次数: $maxReconnectAttempts")
+            WebSocketLogManager.getInstance().addLog(WebSocketLogManager.LogType.ERROR, "已达到最大重连次数: $maxReconnectAttempts，不再尝试重连")
             return
         }
         
@@ -224,9 +265,11 @@ class WebSocketManager {
         val delay = reconnectIntervals[Math.min(reconnectCount, reconnectIntervals.size - 1)]
         
         Log.d(TAG, "计划在 ${delay}ms 后进行第 ${reconnectCount + 1} 次重连")
+        WebSocketLogManager.getInstance().addLog(WebSocketLogManager.LogType.INFO, "计划在 ${delay/1000}秒后进行第 ${reconnectCount + 1} 次重连")
         
         reconnectRunnable = Runnable {
             Log.d(TAG, "执行第 ${reconnectCount + 1} 次重连")
+            WebSocketLogManager.getInstance().addLog(WebSocketLogManager.LogType.INFO, "执行第 ${reconnectCount + 1} 次重连")
             reconnectCount++
             
             // 使用最后的参数重新初始化连接
@@ -243,6 +286,7 @@ class WebSocketManager {
         reconnectRunnable?.let {
             mainHandler.removeCallbacks(it)
             reconnectRunnable = null
+            WebSocketLogManager.getInstance().addLog(WebSocketLogManager.LogType.INFO, "取消待执行的重连任务")
         }
     }
     
@@ -257,11 +301,29 @@ class WebSocketManager {
             client = null
             isConnected = false
             
+            WebSocketLogManager.getInstance().addLog(WebSocketLogManager.LogType.INFO, "执行手动重连")
             // 立即重连
             Log.d(TAG, "执行手动重连")
             init(lastConnectionParams!!, callback!!)
         } else {
             Log.e(TAG, "无法重连：没有连接参数或回调")
+            WebSocketLogManager.getInstance().logError("无法重连：没有连接参数或回调")
+        }
+    }
+    
+    companion object {
+        @Volatile
+        private var instance: WebSocketManager? = null
+        
+        fun getInstance(): WebSocketManager {
+            if (instance == null) {
+                synchronized(this) {
+                    if (instance == null) {
+                        instance = WebSocketManager()
+                    }
+                }
+            }
+            return instance!!
         }
     }
 } 

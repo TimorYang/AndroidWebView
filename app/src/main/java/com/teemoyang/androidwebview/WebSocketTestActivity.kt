@@ -27,11 +27,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import java.util.Timer
+import java.util.TimerTask
 
 class WebSocketTestActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityWebsocketTestBinding
-    private val webSocketManager = WebSocketManager()
+    private val webSocketManager = WebSocketManager.getInstance()
     private var isConnected = false
     
     // 消息类型和接收者
@@ -127,6 +129,12 @@ class WebSocketTestActivity : AppCompatActivity() {
         // 记录默认连接信息
         logMessage("默认服务器地址: ${binding.urlInput.text}", LogType.SYSTEM)
         logMessage("默认设备ID: ${binding.deviceIdInput.text}", LogType.SYSTEM)
+        
+        // 增加对WebSocketLogManager的支持
+        WebSocketLogManager.getInstance().addLog(
+            WebSocketLogManager.LogType.INFO,
+            "WebSocket测试活动已启动"
+        )
     }
     
     private fun setupAutoSendLocationButton() {
@@ -354,32 +362,6 @@ class WebSocketTestActivity : AppCompatActivity() {
         }
     }
     
-    // 注释掉连接方式选择的设置函数
-    /*
-    private fun setupConnectionTypeSpinner() {
-        // 设置连接方式下拉菜单
-        val adapter = ArrayAdapter.createFromResource(
-            this,
-            R.array.connection_types,
-            android.R.layout.simple_spinner_item
-        )
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        binding.connectionTypeSpinner.adapter = adapter
-        
-        // 设置连接方式选择监听
-        binding.connectionTypeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                selectedConnectionType = position
-                logMessage("已选择连接方式: ${position+1}", LogType.SYSTEM)
-            }
-            
-            override fun onNothingSelected(parent: AdapterView<*>) {
-                // 什么都不做
-            }
-        }
-    }
-    */
-    
     private fun updateMessageExample(position: Int) {
         val jsonExample = when (position) {
             0 -> """{"status": 0}""" // 心跳消息
@@ -587,7 +569,7 @@ class WebSocketTestActivity : AppCompatActivity() {
         SENT, RECEIVED, SYSTEM, ERROR
     }
     
-    // 添加日志消息
+    // 添加日志消息 - 同时更新内部日志和WebSocketLogManager
     private fun logMessage(message: String, type: LogType) {
         val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         val logPrefix = when (type) {
@@ -612,6 +594,14 @@ class WebSocketTestActivity : AppCompatActivity() {
         binding.logsScrollView.post {
             binding.logsScrollView.fullScroll(View.FOCUS_DOWN)
         }
+        
+        // 同时更新到WebSocketLogManager
+        when (type) {
+            LogType.SENT -> WebSocketLogManager.getInstance().logSend(message)
+            LogType.RECEIVED -> WebSocketLogManager.getInstance().logReceive(message)
+            LogType.ERROR -> WebSocketLogManager.getInstance().logError(message)
+            LogType.SYSTEM -> WebSocketLogManager.getInstance().addLog(WebSocketLogManager.LogType.INFO, message)
+        }
     }
     
     override fun onDestroy() {
@@ -623,7 +613,10 @@ class WebSocketTestActivity : AppCompatActivity() {
         autoSendHandler.removeCallbacks(autoSendRunnable)
         
         // 关闭WebSocket连接
-        webSocketManager.close()
+        if (isConnected) {
+            webSocketManager.close()
+        }
+        
         super.onDestroy()
     }
 

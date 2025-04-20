@@ -67,6 +67,12 @@
             android:name=".AccelerometerActivity"
             android:exported="false"
             android:label="加速度计数据" />
+            
+        <activity
+            android:name=".WebSocketLogActivity"
+            android:exported="false"
+            android:label="WebSocket日志"
+            android:theme="@style/Theme.AndroidWebView.NoActionBar" />
     </application>
 
 </manifest>
