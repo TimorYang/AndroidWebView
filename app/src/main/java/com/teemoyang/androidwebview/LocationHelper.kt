@@ -412,8 +412,10 @@ class LocationHelper(private val context: Context) {
         if (!checkLocationPermission()) {
             logInfo("没有位置权限，请求授权...")
             if (ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION)) {
+                // 用户已经明确拒绝过权限，显示自定义权限说明对话框
                 showPermissionRationaleDialog(activity, LOCATION_PERMISSION_REQUEST_CODE)
             } else {
+                // 用户第一次请求权限或在系统设置中"不再询问"，直接使用系统权限请求对话框
                 requestLocationPermission(activity, LOCATION_PERMISSION_REQUEST_CODE)
             }
         } else {
