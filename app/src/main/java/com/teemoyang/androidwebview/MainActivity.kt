@@ -134,6 +134,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        startSensorsAfterWebViewLoad()
         
         // 从SharedPreferences读取首次权限标志
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -171,9 +173,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     "WebView页面加载完成",
                     url
                 )
-                
-                // WebView加载完成后，启动传感器扫描
-                // startSensorsAfterWebViewLoad()
             }
             
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
@@ -221,13 +220,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     // 没有权限时拒绝网页使用定位
                     callback?.invoke(origin, false, false)
                     Log.e("MainActivity.WebView.Permission", "应用没有定位权限，已拒绝网页定位请求: $origin")
-                    
-                    // 可以在这里请求权限，但不直接在这个回调中处理
-                    // 需要用户明确授权后再重新加载页面
-                    if (locationHelper == null) {
-                        // 如果locationHelper未初始化，则初始化它
-                        startLocationService()
-                    }
                 }
             }
         }
