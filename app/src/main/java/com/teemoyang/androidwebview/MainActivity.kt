@@ -55,7 +55,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     
     // URL相关常量
     private val BASE_URL = "https://navmobiletest.joysuch.com"
-    private val MINIPROGRAM_PATH = "/navmobile/JoysuchMiniProgram/index.html"
+    private val MINIPROGRAM_PATH = "/navmobile/JoysuchMiniProgram/index.html#/"
     private val WS_PROTOCOL = "wss://"  // WebSocket安全协议
     private val WS_BASE_DOMAIN = "navmobiletest.joysuch.com"  // 不含协议的域名
     private val WS_PATH = "/locationEngine/websocket/"  // WebSocket路径
