@@ -3,6 +3,8 @@ package com.teemoyang.androidwebview
 import android.os.Bundle
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
+import android.webkit.GeolocationPermissions
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -107,6 +109,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // 定位计数器
     private var locateCount = 0
     
+    // 添加标志，用于追踪是否是首次获取权限
+    private var isFirstTimePermissionGrant = true
+    
+    // SharedPreferences相关常量
+    companion object {
+        private const val PREFS_NAME = "WebViewAppPrefs"
+        private const val KEY_FIRST_TIME_PERMISSION = "first_time_location_permission"
+    }
+    
     // 添加字节转十六进制的工具方法
     private fun byteToHex(bytes: ByteArray, length: Int): String {
         val hexArray = "0123456789ABCDEF".toCharArray()
@@ -124,17 +135,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
+        // 从SharedPreferences读取首次权限标志
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        isFirstTimePermissionGrant = prefs.getBoolean(KEY_FIRST_TIME_PERMISSION, true)
+        Log.d("MainActivity.WebView.Permission", "从本地存储读取权限状态: 首次授权=$isFirstTimePermissionGrant")
+        
+        // 开启 WebView 调试模式
+        WebView.setWebContentsDebuggingEnabled(true)
+        
         // 获取并显示设备ID
         displayDeviceId()
         
         // 设置系统栏适配
         WindowCompat.setDecorFitsSystemWindows(window, true)
+    
         
         webView = findViewById(R.id.webview)
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            setSupportZoom(true)
+            setSupportZoom(false)
+            // 启用地理位置
+            setGeolocationEnabled(true)
         }
 
         // 设置WebView加载完成监听器
@@ -151,7 +173,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 )
                 
                 // WebView加载完成后，启动传感器扫描
-                startSensorsAfterWebViewLoad()
+                // startSensorsAfterWebViewLoad()
             }
             
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
@@ -176,6 +198,40 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 return super.shouldOverrideUrlLoading(view, url)
             }
         }
+        
+        // 设置WebChromeClient来处理地理位置权限
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
+                // 检查应用是否有定位权限
+                val fineLocationPermission = ContextCompat.checkSelfPermission(
+                    this@MainActivity,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                )
+                val coarseLocationPermission = ContextCompat.checkSelfPermission(
+                    this@MainActivity,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+                
+                if (fineLocationPermission == PackageManager.PERMISSION_GRANTED || 
+                    coarseLocationPermission == PackageManager.PERMISSION_GRANTED) {
+                    // 有权限时允许网页使用定位
+                    callback?.invoke(origin, true, false)
+                    Log.d("MainActivity.WebView.Permission", "地理位置权限已授予网页: $origin")
+                } else {
+                    // 没有权限时拒绝网页使用定位
+                    callback?.invoke(origin, false, false)
+                    Log.e("MainActivity.WebView.Permission", "应用没有定位权限，已拒绝网页定位请求: $origin")
+                    
+                    // 可以在这里请求权限，但不直接在这个回调中处理
+                    // 需要用户明确授权后再重新加载页面
+                    if (locationHelper == null) {
+                        // 如果locationHelper未初始化，则初始化它
+                        startLocationService()
+                    }
+                }
+            }
+        }
+        
         // get 形式 拼接 deviceId
         val deviceId = DeviceManager.getInstance().getDeviceId()
         val fullUrl = BASE_URL + MINIPROGRAM_PATH + "?wxOpenId=$deviceId"
@@ -524,6 +580,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      */
     private fun startLocationService() {
         Log.d("MainActivity.Location", "启动定位服务")
+        
         // 存储LocationHelper实例以便在onRequestPermissionsResult中使用
         locationHelper = LocationHelper(this)
             .setEnableVerboseLogging(false)  // 控制日志输出
@@ -537,28 +594,63 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         })
         
+        locationHelper?.setOnLocationErrorListener(object : LocationHelper.OnLocationErrorListener {
+            override fun onLocationError(errorMessage: String) {
+                Log.e("MainActivity.Location", "位置错误: $errorMessage")
+            }
+        })
+        
         // 修改位置权限回调
         locationHelper?.setOnPermissionCallback(object : LocationHelper.OnPermissionCallback {
             override fun onPermissionGranted() {
                 Log.d("MainActivity.Location", "位置权限已授予")
+                
+                // 获取当前的权限状态记录
+                val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val wasPermissionGrantedBefore = !prefs.getBoolean(KEY_FIRST_TIME_PERMISSION, true)
+                
                 // 启动蓝牙扫描
                 startBeaconScan()
                 // 启动WiFi扫描
 //                startWifiScan()
                 // 在获取位置权限后启动10秒的定时任务
                 tenSecondTimer()
+                
+                // 只有在首次获取权限时才刷新WebView（根据本地存储判断）
+                if (!wasPermissionGrantedBefore) {
+                    runOnUiThread {
+                        // 通知WebView地理位置权限已变更
+                        if (::webView.isInitialized) {
+                            Log.d("MainActivity.WebView.Permission", "首次获取位置权限，刷新WebView")
+                            // 刷新当前页面或执行JS来重新请求地理位置权限
+                            webView.reload()
+                        }
+                    }
+                    
+                    // 保存状态到SharedPreferences
+                    prefs.edit().putBoolean(KEY_FIRST_TIME_PERMISSION, false).apply()
+                    Log.d("MainActivity.WebView.Permission", "已将权限状态保存到本地存储")
+                } else {
+                    Log.d("MainActivity.WebView.Permission", "已有权限记录，不刷新WebView")
+                }
             }
             
             override fun onPermissionDenied() {
                 Log.e("MainActivity.Location", "位置权限被拒绝")
+                
+                // 读取当前的权限状态记录
+                val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val wasPermissionGrantedBefore = !prefs.getBoolean(KEY_FIRST_TIME_PERMISSION, true)
+                
+                // 如果之前有权限，现在被拒绝，更新状态
+                if (wasPermissionGrantedBefore) {
+                    // 更新存储，标记为首次授权
+                    prefs.edit().putBoolean(KEY_FIRST_TIME_PERMISSION, true).apply()
+                    Log.d("MainActivity.WebView.Permission", "权限被拒绝，重置首次授权标志")
+                }
+                
                 // 弹窗，引导用户去设置页面开启位置权限
 //                locationHelper?.showLocationSettingsDialog(this@MainActivity)
-            }
-        })
-
-        locationHelper?.setOnLocationErrorListener(object : LocationHelper.OnLocationErrorListener {
-            override fun onLocationError(errorMessage: String) {
-                Log.e("MainActivity.Location", "位置错误: $errorMessage")
             }
         })
         
@@ -659,6 +751,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // 将权限结果传递给LocationHelper
         if (locationHelper?.onRequestPermissionsResult(requestCode, permissions, grantResults) == true) {
             Log.d("MainActivity.Location", "位置权限结果已处理")
+            
+            // 检查是否包含定位权限，并且是否被授予
+            val hasLocationPermission = permissions.any { 
+                it == Manifest.permission.ACCESS_FINE_LOCATION || it == Manifest.permission.ACCESS_COARSE_LOCATION 
+            } && grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+            
+            // 如果是定位权限且被授予，通知WebView重新评估地理位置权限
+            if (hasLocationPermission) {
+                // 通知WebView地理位置权限已变更
+                webView.reload()  // 这是最简单的方式，重新加载当前页面
+                Log.d("MainActivity.WebView.Permission", "定位权限已授予，重新加载WebView")
+            }
+            
             return
         }
         
