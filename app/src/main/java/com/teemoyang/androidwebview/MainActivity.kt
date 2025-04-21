@@ -996,9 +996,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 // 检查RSSI值是否在有效范围内
                 val rssi = beacon.rssi
                 if (rssi < 0 && rssi > -95) {
-                    // val uuidStr = beacon.id1.toString().toUpperCase()
-                    // val code = uuidToCode[uuidStr]
-                    val code = "0001"
+                    val uuidStr = beacon.id1.toString().toUpperCase()
+                    val code = uuidToCode[uuidStr]
                     
                     if (code != null) {
                         // 获取major和minor
@@ -1105,6 +1104,133 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         } catch (e: Exception) {
             Log.e("MainActivity.webSocket.sendMessage", "处理Beacon数据出错: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
+    private fun sendWifiData() {
+        try {
+            // 从SensorDataManager获取最新的Wifi数据
+            val wifiData = SensorDataManager.getInstance().getWifiScanResults()
+            
+            // 固定使用code "0001"，对应UUID 1918FC80-B111-3441-A9AC-B1001C2FE510
+            val wifiCode = "0001"
+            
+            // 在方法内定义wifiRssiMap
+            val wifiRssiMap = mutableMapOf<String, Int>()
+            
+            // 处理每个WiFi扫描结果
+            for (scanResult in wifiData) {
+                try {
+                    // 获取MAC地址，跳过没有MAC地址的WiFi热点
+                    val bssid = scanResult.BSSID ?: continue
+                    
+                    // 移除MAC地址中的冒号
+                    val macAddress = bssid.replace(":", "")
+                    
+                    // 获取信号强度
+                    val rssi = scanResult.level
+                    
+                    // 确保MAC地址长度正确
+                    if (macAddress.length == 12) {  // 标准MAC地址没有冒号后是12个字符
+                        // 分割MAC地址 - 前4个字符作为前缀，中间4个字符作为major，最后4个字符作为minor
+                        val major = macAddress.substring(4, 8)
+                        val minor = macAddress.substring(8, 12)
+                        
+                        // 生成ID (格式: code + major + minor)
+                        val id = wifiCode + major + minor
+                        
+                        // 存储或更新RSSI值 - 只保留信号最强的
+                        val currentRssi = wifiRssiMap[id.toUpperCase()]
+                        if (currentRssi == null || rssi > currentRssi) {
+                            wifiRssiMap[id.toUpperCase()] = rssi
+                            Log.d("MainActivity.WiFi", "WiFi: $macAddress, RSSI: $rssi, ID: $id")
+                        }
+                    }
+                } catch (e: Exception) {
+                    // 跳过无法处理的WiFi热点
+                    Log.e("MainActivity.WiFi", "处理WiFi热点时出错: ${e.message}")
+                    continue
+                }
+            }
+            
+            if (wifiRssiMap.isNotEmpty()) {
+                // 创建WiFi数组
+                val didArray = JSONArray()
+                
+                // 遍历wifiRssiMap，生成JSON对象
+                for ((id, rssiValue) in wifiRssiMap) {
+                    val obj = JSONObject()
+                    obj.put("id", id)
+                    obj.put("rssi", rssiValue)
+                    didArray.put(obj)
+                }
+                
+                // 创建map数组
+                val mapArray = JSONArray()
+                for ((code, uuid) in codeToUuid) {
+                    val mapObj = JSONObject()
+                    mapObj.put("key", code)
+                    mapObj.put("value", uuid)
+                    mapArray.put(mapObj)
+                }
+                
+                // 获取时间戳和格式化时间
+                val timestamp = System.currentTimeMillis()
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                val currentDate = dateFormat.format(Date(timestamp))
+                
+                // 增加定位计数
+                locateCount++
+                
+                // 创建完整的定位请求数据
+                val locateJsonObj = JSONObject().apply {
+                    put("deviceId", deviceId)
+                    put("did", didArray)
+                    put("map", mapArray)
+                    put("locateCount", locateCount)
+                    put("currentDate", currentDate)
+                    put("timestamp", timestamp)
+                    put("time", currentDate)
+                    
+                    // 添加mac数组（空）
+                    put("mac", JSONArray())
+                    
+                    // 添加magnetic数组（空）
+                    put("magnetic", JSONArray())
+                    
+                    // 添加orientation数组（空）
+                    put("orientation", JSONArray())
+                    
+                    // 添加sensorInfo对象
+                    val sensorInfoObj = JSONObject().apply {
+                        put("isSensorValid", "0")
+                        put("step", "0")
+                        put("isMoving", "0")
+                        put("compassValue", "0")
+                    }
+                    put("sensorInfo", sensorInfoObj)
+                }
+                
+                // 发送到服务端
+                if (webSocketManager.isConnected()) {
+                    val dataObj = JSONObject().apply {
+                        put("httpLocateParam", locateJsonObj)
+                    }
+                    val success = webSocketManager.webSocketSend("1", "Engine", dataObj)
+                    if (success) {
+                        Log.d("MainActivity.webSocket.sendMessage", "WiFi定位数据发送成功: ${didArray.length()}个WiFi")
+                    } else {
+                        Log.e("MainActivity.webSocket.sendMessage", "WiFi定位数据发送失败")
+                    }
+                } else {
+                    Log.e("MainActivity.webSocket.sendMessage", "WebSocket未连接，无法发送WiFi数据")
+                }
+            } else {
+                Log.d("MainActivity.webSocket.sendMessage", "没有可用的WiFi数据")
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity.webSocket.sendMessage", "处理WiFi数据出错: ${e.message}")
             e.printStackTrace()
         }
     }
