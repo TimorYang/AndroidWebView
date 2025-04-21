@@ -141,13 +141,51 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 super.onPageFinished(view, url)
                 Log.d("MainActivity", "WebView页面加载完成: $url")
                 
+                // 将URL添加到WebSocket日志
+                WebSocketLogManager.getInstance().addLog(
+                    WebSocketLogManager.LogType.INFO,
+                    "WebView页面加载完成",
+                    url
+                )
+                
                 // WebView加载完成后，启动传感器扫描
                 startSensorsAfterWebViewLoad()
+            }
+            
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                Log.d("MainActivity", "WebView页面开始加载: $url")
+                
+                // 将URL添加到WebSocket日志
+                WebSocketLogManager.getInstance().addLog(
+                    WebSocketLogManager.LogType.INFO,
+                    "WebView页面开始加载",
+                    url
+                )
+            }
+            
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                // 将URL导航记录添加到WebSocket日志
+                WebSocketLogManager.getInstance().addLog(
+                    WebSocketLogManager.LogType.INFO,
+                    "WebView导航到新URL",
+                    url
+                )
+                return super.shouldOverrideUrlLoading(view, url)
             }
         }
         // get 形式 拼接 deviceId
         val deviceId = DeviceManager.getInstance().getDeviceId()
-        webView.loadUrl(BASE_URL + MINIPROGRAM_PATH + "?wxOpenId=$deviceId")
+        val fullUrl = BASE_URL + MINIPROGRAM_PATH + "?wxOpenId=$deviceId"
+        
+        // 记录初始URL到WebSocket日志
+        WebSocketLogManager.getInstance().addLog(
+            WebSocketLogManager.LogType.INFO,
+            "WebView加载初始URL",
+            fullUrl
+        )
+        
+        webView.loadUrl(fullUrl)
         
         // 设置返回键处理，兼容新旧版本Android
         setupBackNavigation()
@@ -420,15 +458,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             startActivity(Intent(this, WiFiScanActivity::class.java))
         }
         
-        // 设置加速度计按钮
-        binding.btnAccelerometer.setOnClickListener {
-            startActivity(Intent(this, AccelerometerActivity::class.java))
+        // 设置WebSocket日志按钮
+        binding.btnWebSocketLog.setOnClickListener {
+            startActivity(Intent(this, WebSocketLogActivity::class.java))
         }
         
-        // 设置WebSocket测试按钮
-        binding.btnWebSocketTest.setOnClickListener {
-            startActivity(Intent(this, WebSocketTestActivity::class.java))
-        }
+        // 设置加速度计按钮（已隐藏，不再使用）
+        // binding.btnAccelerometer.setOnClickListener {
+        //    startActivity(Intent(this, AccelerometerActivity::class.java))
+        // }
+        
+        // 设置WebSocket测试按钮（已隐藏，不再使用）
+        // binding.btnWebSocketTest.setOnClickListener {
+        //    startActivity(Intent(this, WebSocketTestActivity::class.java))
+        // }
     }
 
     /**
@@ -500,7 +543,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 // 启动蓝牙扫描
                 startBeaconScan()
                 // 启动WiFi扫描
-                startWifiScan()
+//                startWifiScan()
                 // 在获取位置权限后启动10秒的定时任务
                 tenSecondTimer()
             }
@@ -562,6 +605,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 
                 override fun onScanStart() {
                     Log.d("MainActivity.Beacon", "信标扫描已启动")
+                    sendBluetoothPermissionStatus(true)
                 }
                 
                 override fun onScanStop() {
@@ -577,6 +621,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             beaconScanner?.startScan()
         } catch (e: Exception) {
             Log.e("MainActivity.Beacon", "启动蓝牙扫描失败: ${e.message}")
+            sendBluetoothPermissionStatus(false)
             e.printStackTrace()
         }
     }
@@ -770,8 +815,25 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun sendBeaconData() {
         try {
+            // 假数据
+            val fakeBeacons = mutableListOf<Beacon>()
+            // 使用Beacon.Builder创建Beacon对象
+            val fakeBeacon = Beacon.Builder()
+                .setBluetoothAddress("00:00:00:00:00:00")
+                .setId1("FDA50693-A4E2-4FB1-AFCF-C6EB07647825")
+                .setId2("20012")
+                .setId3("53485")
+                .setRssi(-65)
+                .setTxPower(-59) // 设置一个默认的发射功率
+                .build()
+                
+            fakeBeacons.add(fakeBeacon)
+            // 使用假数据
+            val beacons = fakeBeacons
+
             // 从SensorDataManager获取最新的Beacon数据
-            val beacons = SensorDataManager.getInstance().getBeaconData()
+            // val beacons = SensorDataManager.getInstance().getBeaconData()
+
             if (beacons.isEmpty()) {
                 Log.d("MainActivity.webSocket.sendMessage", "没有可用的Beacon数据")
                 return
@@ -785,8 +847,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 // 检查RSSI值是否在有效范围内
                 val rssi = beacon.rssi
                 if (rssi < 0 && rssi > -95) {
-                    val uuidStr = beacon.id1.toString().toUpperCase()
-                    val code = uuidToCode[uuidStr]
+                    // val uuidStr = beacon.id1.toString().toUpperCase()
+                    // val code = uuidToCode[uuidStr]
+                    val code = "0001"
                     
                     if (code != null) {
                         // 获取major和minor
@@ -856,13 +919,35 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     put("currentDate", currentDate)
                     put("timestamp", timestamp)
                     put("time", currentDate)
+                    
+                    // 添加mac数组（空）
+                    put("mac", JSONArray())
+                    
+                    // 添加magnetic数组（空）
+                    put("magnetic", JSONArray())
+                    
+                    // 添加orientation数组（空）
+                    put("orientation", JSONArray())
+                    
+                    // 添加sensorInfo对象
+                    val sensorInfoObj = JSONObject().apply {
+                        put("isSensorValid", "0")
+                        put("step", "0")
+                        put("isMoving", "0")
+                        put("compassValue", "0")
+                    }
+                    put("sensorInfo", sensorInfoObj)
                 }
                 
                 // 发送到服务端
                 if (webSocketManager.isConnected()) {
-                    val success = webSocketManager.webSocketSend("1", "Engine", locateJsonObj)
+                    val dataObj = JSONObject().apply {
+                        put("httpLocateParam", locateJsonObj)
+                    }
+                    val success = webSocketManager.webSocketSend("1", "Engine", dataObj)
                     if (success) {
                         Log.d("MainActivity.webSocket.sendMessage", "定位数据发送成功: ${didArray.length()}个信标")
+                        isSendBeaconData = true
                     } else {
                         Log.e("MainActivity.webSocket.sendMessage", "定位数据发送失败")
                     }

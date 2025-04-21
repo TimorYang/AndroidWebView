@@ -150,12 +150,19 @@ class BeaconScanActivity : AppCompatActivity() {
             }
         }
         
-        // WebSocket测试按钮
-        binding.fabWebsocket.setOnClickListener {
-            // 启动WebSocket测试页面
-            val intent = Intent(this, WebSocketTestActivity::class.java)
+        // WebSocket日志按钮
+        binding.fabWebsocketLog.setOnClickListener {
+            // 启动WebSocket日志页面
+            val intent = Intent(this, WebSocketLogActivity::class.java)
             startActivity(intent)
         }
+        
+        // WebSocket测试按钮（隐藏，不再使用）
+        // binding.fabWebsocket.setOnClickListener {
+        //     // 启动WebSocket测试页面
+        //     val intent = Intent(this, WebSocketTestActivity::class.java)
+        //     startActivity(intent)
+        // }
     }
     
     /**
