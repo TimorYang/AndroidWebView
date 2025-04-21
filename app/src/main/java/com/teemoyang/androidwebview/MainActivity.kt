@@ -45,6 +45,7 @@ import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Date
+import android.view.View
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var webView: WebView
@@ -530,18 +531,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun initButtons() {
-        // 设置信标扫描按钮
-        binding.btnBeaconScan.setOnClickListener {
-            startActivity(Intent(this, BeaconScanActivity::class.java))
-        }
+        // 隐藏信标扫描按钮
+        binding.btnBeaconScan.visibility = View.GONE
         
-        // 设置WiFi扫描按钮
-        binding.btnWifiScan.setOnClickListener {
-            startActivity(Intent(this, WiFiScanActivity::class.java))
-        }
+        // 隐藏WiFi扫描按钮
+        binding.btnWifiScan.visibility = View.GONE
         
-        // 设置WebSocket日志按钮
-        binding.btnWebSocketLog.setOnClickListener {
+        // 隐藏原来的WebSocket日志按钮
+        binding.btnWebSocketLog.visibility = View.GONE
+        
+        // 设置悬浮按钮的点击事件
+        binding.fabWebSocketLog.setOnClickListener {
             startActivity(Intent(this, WebSocketLogActivity::class.java))
         }
         
