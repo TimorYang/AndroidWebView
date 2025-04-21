@@ -105,6 +105,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // 上次发送beacon数据的时间
     private var lastBeaconSendTime = 0L
     
+    // 发送Beacon数据的时间间隔（毫秒）
+    private val BEACON_SEND_INTERVAL = 1000L  // 1秒
+    
+    // 发送GPS数据的时间间隔（毫秒）
+    private val GPS_SEND_INTERVAL = 10000L  // 10秒
+    
     // 添加UUID到完整UUID值的映射
     private val codeToUuid = mapOf(
         "0000" to "FDA50693A4E24FB1AFCFC6EB07647825",
@@ -633,7 +639,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 // 启动WiFi扫描
 //                startWifiScan()
                 // 在获取位置权限后启动10秒的定时任务
-                tenSecondTimer()
+                locationTimerTask()
                 
                 // 只有在首次获取权限时才刷新WebView（根据本地存储判断）
                 if (!wasPermissionGrantedBefore) {
@@ -713,10 +719,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 override fun onScanStart() {
                     Log.d("MainActivity.Beacon", "信标扫描已启动")
                     sendBluetoothPermissionStatus(true)
-                    
-                    // 在蓝牙扫描启动成功时立即启动定时器
-                    // 确保定时发送数据
-                    tenSecondTimer()
                 }
                 
                 override fun onScanStop() {
@@ -878,8 +880,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    private fun tenSecondTimer() {
-        Log.d("MainActivity.tasktimer", "启动10秒定时检查")
+    /**
+     * 启动位置数据发送定时任务
+     * 每1秒发送一次Beacon数据，如果10秒内没有发送过Beacon数据，则发送GPS数据
+     */
+    private fun locationTimerTask() {
+        Log.d("MainActivity.locationTimerTask", "启动位置数据发送定时任务")
         
         // 取消已有的定时器
         beaconTimer?.cancel()
@@ -887,31 +893,32 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // 创建新的定时器
         beaconTimer = Timer()
         
-        // 创建定时任务，10秒后执行一次
-        beaconTimer?.schedule(object : TimerTask() {
+        // 创建定时任务，每1秒执行一次
+        beaconTimer?.scheduleAtFixedRate(object : TimerTask() {
             override fun run() {
                 try {
+                    val currentTime = System.currentTimeMillis()
+                    
                     // 检查是否有有效的Beacon数据
-                    // 使用假数据 - 在实际使用中可以检查SensorDataManager
                     val hasValidBeacons = checkBeaconData()
                     
                     if (hasValidBeacons) {
                         // 如果有有效beacon数据，发送beacon数据
-                        Log.d("MainActivity.tasktimer", "10秒定时，发送Beacon数据")
+                        Log.d("MainActivity.locationTimerTask", "发送Beacon数据")
                         sendBeaconData()
-                    } else {
-                        // 如果没有有效beacon数据，发送GPS数据
-                        Log.d("MainActivity.tasktimer", "10秒定时，发送GPS数据")
+                        lastBeaconSendTime = currentTime
+                    } else if (currentTime - lastBeaconSendTime >= GPS_SEND_INTERVAL) {
+                        // 如果10秒内没有发送过Beacon数据，发送GPS数据
+                        Log.d("MainActivity.locationTimerTask", "10秒内未发送Beacon数据，发送GPS数据")
                         sendLocationData()
+                        // 更新最后发送时间，避免频繁发送GPS数据
+                        lastBeaconSendTime = currentTime
                     }
                 } catch (e: Exception) {
-                    Log.e("MainActivity.tasktimer", "定时任务执行出错: ${e.message}")
+                    Log.e("MainActivity.locationTimerTask", "定时任务执行出错: ${e.message}")
                 }
-                
-                // 重新启动定时器以继续监听
-                tenSecondTimer()
             }
-        }, 10000) // 10秒后执行一次
+        }, 0, BEACON_SEND_INTERVAL) // 立即开始，每1秒执行一次
     }
     
     /**
@@ -919,11 +926,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      */
     private fun checkBeaconData(): Boolean {
         // 如果使用假数据，直接返回true
-        return true
+        // return true
         
         // 如果使用实际数据，可以这样检查
-        // val beacons = SensorDataManager.getInstance().getBeaconData()
-        // return beacons.isNotEmpty()
+        val beacons = SensorDataManager.getInstance().getBeaconData()
+        return beacons.isNotEmpty()
     }
 
     private fun sendLocationData() {
@@ -961,6 +968,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun sendBeaconData() {
         try {
+            /*
             // 假数据
             val fakeBeacons = mutableListOf<Beacon>()
             // 使用Beacon.Builder创建Beacon对象
@@ -976,14 +984,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             fakeBeacons.add(fakeBeacon)
             // 使用假数据
             val beacons = fakeBeacons
-
+            */
             // 从SensorDataManager获取最新的Beacon数据
-            // val beacons = SensorDataManager.getInstance().getBeaconData()
-
-            if (beacons.isEmpty()) {
-                Log.d("MainActivity.webSocket.sendMessage", "没有可用的Beacon数据")
-                return
-            }
+            val beacons = SensorDataManager.getInstance().getBeaconData()
             
             // 在方法内定义rssiBeaconMap
             val rssiBeaconMap = mutableMapOf<String, Int>()
