@@ -15,12 +15,16 @@ import com.teemoyang.androidwebview.databinding.ActivityWebsocketLogBinding
 import android.view.LayoutInflater
 import android.view.Menu
 import com.teemoyang.androidwebview.WebSocketLogManager.LogType
+import android.content.ClipboardManager
+import android.content.ClipData
+import android.content.Context
 
 class WebSocketLogActivity : AppCompatActivity() {
     private lateinit var binding: ActivityWebsocketLogBinding
     private lateinit var logRecyclerView: RecyclerView
     private lateinit var logAdapter: WebSocketLogAdapter
     private lateinit var clearLogsButton: FloatingActionButton
+    private lateinit var scrollToBottomButton: FloatingActionButton
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,6 +41,9 @@ class WebSocketLogActivity : AppCompatActivity() {
         // Setup RecyclerView
         setupViews()
         observeLogs()
+        
+        // 显示提示，告诉用户可以点击条目复制
+        Toast.makeText(this, "点击日志条目可复制内容", Toast.LENGTH_LONG).show()
     }
     
     private fun setupViews() {
@@ -51,13 +58,21 @@ class WebSocketLogActivity : AppCompatActivity() {
             WebSocketLogManager.getInstance().clearLogs()
             Toast.makeText(this, "日志已清除", Toast.LENGTH_SHORT).show()
         }
+        
+        // 添加滚动到底部按钮的处理
+        scrollToBottomButton = binding.scrollToBottomButton
+        scrollToBottomButton.setOnClickListener {
+            val logs = WebSocketLogManager.getInstance().getLogs().value ?: emptyList()
+            if (logs.isNotEmpty()) {
+                logRecyclerView.smoothScrollToPosition(logs.size - 1)
+            }
+        }
     }
     
     private fun observeLogs() {
         WebSocketLogManager.getInstance().getLogs().observe(this) { logs ->
             logAdapter.updateLogs(logs)
             if (logs.isNotEmpty()) {
-                logRecyclerView.scrollToPosition(logs.size - 1) // 滚动到最新的日志（最后一条）
                 binding.emptyView.visibility = View.GONE
             } else {
                 binding.emptyView.visibility = View.VISIBLE
@@ -112,6 +127,17 @@ class WebSocketLogActivity : AppCompatActivity() {
             private val tvMessage: TextView = itemView.findViewById(R.id.tvMessage)
             private val tvDetails: TextView = itemView.findViewById(R.id.tvDetails)
             
+            init {
+                // 设置点击整个条目的监听器
+                itemView.setOnClickListener {
+                    val position = adapterPosition
+                    if (position != RecyclerView.NO_POSITION) {
+                        val logEntry = logs[position]
+                        copyToClipboard(logEntry)
+                    }
+                }
+            }
+            
             fun bind(logEntry: WebSocketLogManager.LogEntry) {
                 tvTimestamp.text = logEntry.formattedTime
                 tvType.text = logEntry.type.name
@@ -137,5 +163,33 @@ class WebSocketLogActivity : AppCompatActivity() {
                 itemView.setBackgroundResource(backgroundColor)
             }
         }
+    }
+    
+    /**
+     * 将日志条目复制到剪贴板
+     */
+    private fun copyToClipboard(logEntry: WebSocketLogManager.LogEntry) {
+        val clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val formattedLog = formatLogEntryForClipboard(logEntry)
+        
+        val clipData = ClipData.newPlainText("WebSocket日志", formattedLog)
+        clipboardManager.setPrimaryClip(clipData)
+        
+        // 显示提示
+        Toast.makeText(this, "日志已复制到剪贴板", Toast.LENGTH_SHORT).show()
+    }
+    
+    /**
+     * 格式化日志条目用于剪贴板
+     */
+    private fun formatLogEntryForClipboard(logEntry: WebSocketLogManager.LogEntry): String {
+        val sb = StringBuilder()
+        sb.append("[${logEntry.formattedTime}] ${logEntry.type.name}: ${logEntry.message}")
+        
+        if (logEntry.details.isNotEmpty()) {
+            sb.append("\n详情: ${logEntry.details}")
+        }
+        
+        return sb.toString()
     }
 } 

@@ -45,5 +45,14 @@
             android:layout_margin="16dp"
             android:contentDescription="清除日志"
             android:src="@android:drawable/ic_menu_delete" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/scrollToBottomButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="start|bottom"
+            android:layout_margin="16dp"
+            android:contentDescription="滚动到底部"
+            android:src="@android:drawable/ic_menu_more" />
     </FrameLayout>
 </LinearLayout> 

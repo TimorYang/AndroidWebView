@@ -36,16 +36,8 @@ class WebSocketManager {
     // 初始化并连接WebSocket
     fun init(params: Map<String, String>, callback: WebSocketCallback) {
         wsUrl = params["url"] ?: ""
-        deviceId = params["deviceId"] ?: ""
         this.callback = callback
         this.lastConnectionParams = params
-        
-        // 添加设备ID参数
-        wsUrl = if (wsUrl.contains("?")) {
-            "$wsUrl&deviceId=$deviceId"
-        } else {
-            "$wsUrl?deviceId=$deviceId"
-        }
         
         Log.d(TAG, "连接WebSocket: $wsUrl")
         // 记录连接尝试

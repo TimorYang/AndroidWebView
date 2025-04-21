@@ -74,7 +74,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private val SHAKE_THRESHOLD = 800 // 摇动阈值
     private val SHAKE_INTERVAL = 1000 // 两次摇动之间的最小间隔（毫秒）
     private var lastShakeTime: Long = 0
-    private var isSendBeaconData = false
+    
+    // 重命名以更清晰地表达变量含义
+    private var hasBeaconData = false
     
     // 添加权限结果处理
     private var locationHelper: LocationHelper? = null
@@ -213,8 +215,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         
         // 准备连接参数
         val params = mapOf(
-            "url" to webSocketUrl,
-            "deviceId" to deviceId
+            "url" to webSocketUrl
         )
         
         // 添加WebSocket回调
@@ -571,6 +572,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun startBeaconScan() {
         Log.d("MainActivity.Beacon", "启动蓝牙信标扫描")
         
+        // 确保任何已存在的定时器被取消
+        beaconTimer?.cancel()
+        beaconTimer = null
+        
         try {
             // 在需要使用时创建和初始化BeaconScanner
             beaconScanner = BeaconScanner(this)
@@ -582,15 +587,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 override fun onBeaconFound(beaconCollection: Collection<Beacon>) {
                     // 更新到SensorDataManager
                     SensorDataManager.getInstance().updateBeaconData(beaconCollection)
-                    
-                    // 设置标志，表示已收到beacon数据
-                    isSendBeaconData = true
-                    
-                    // 发送beacon数据到WebSocket
-                    sendBeaconData()
-                    
-                    // 重新启动10秒定时器
-                    tenSecondTimer()
                     
                     // 记录发现的信标信息
                     beaconCollection.forEach { beacon ->
@@ -606,6 +602,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 override fun onScanStart() {
                     Log.d("MainActivity.Beacon", "信标扫描已启动")
                     sendBluetoothPermissionStatus(true)
+                    
+                    // 在蓝牙扫描启动成功时立即启动定时器
+                    // 确保定时发送数据
+                    tenSecondTimer()
                 }
                 
                 override fun onScanStop() {
@@ -766,18 +766,40 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // 创建定时任务，10秒后执行一次
         beaconTimer?.schedule(object : TimerTask() {
             override fun run() {
-                if (!isSendBeaconData) {
-                    // 如果10秒内没有收到beacon数据，发送GPS数据
-                    Log.d("MainActivity.tasktimer", "10秒内未收到Beacon数据，发送GPS数据")
-                    sendLocationData()
-                } 
-                // 重置标志，为下一次检测做准备
-                isSendBeaconData = false
+                try {
+                    // 检查是否有有效的Beacon数据
+                    // 使用假数据 - 在实际使用中可以检查SensorDataManager
+                    val hasValidBeacons = checkBeaconData()
+                    
+                    if (hasValidBeacons) {
+                        // 如果有有效beacon数据，发送beacon数据
+                        Log.d("MainActivity.tasktimer", "10秒定时，发送Beacon数据")
+                        sendBeaconData()
+                    } else {
+                        // 如果没有有效beacon数据，发送GPS数据
+                        Log.d("MainActivity.tasktimer", "10秒定时，发送GPS数据")
+                        sendLocationData()
+                    }
+                } catch (e: Exception) {
+                    Log.e("MainActivity.tasktimer", "定时任务执行出错: ${e.message}")
+                }
                 
                 // 重新启动定时器以继续监听
                 tenSecondTimer()
             }
         }, 10000) // 10秒后执行一次
+    }
+    
+    /**
+     * 检查是否有有效的Beacon数据
+     */
+    private fun checkBeaconData(): Boolean {
+        // 如果使用假数据，直接返回true
+        return true
+        
+        // 如果使用实际数据，可以这样检查
+        // val beacons = SensorDataManager.getInstance().getBeaconData()
+        // return beacons.isNotEmpty()
     }
 
     private fun sendLocationData() {
@@ -801,7 +823,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             if (webSocketManager.isConnected()) {
                 val success = webSocketManager.webSocketSend("1", "Engine", dataObj)
                 if (success) {
-                    Log.d("MainActivity.webSocket.sendMessage", "GPS位置数据发送成功")
+                    Log.d("MainActivity.webSocket.sendMessage", "GPS位置数据发送成功 (10秒定时发送)")
                 } else {
                     Log.e("MainActivity.webSocket.sendMessage", "GPS位置数据发送失败")
                 }
@@ -946,8 +968,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     }
                     val success = webSocketManager.webSocketSend("1", "Engine", dataObj)
                     if (success) {
-                        Log.d("MainActivity.webSocket.sendMessage", "定位数据发送成功: ${didArray.length()}个信标")
-                        isSendBeaconData = true
+                        Log.d("MainActivity.webSocket.sendMessage", "定位数据发送成功: ${didArray.length()}个信标 (10秒定时发送)")
                     } else {
                         Log.e("MainActivity.webSocket.sendMessage", "定位数据发送失败")
                     }
