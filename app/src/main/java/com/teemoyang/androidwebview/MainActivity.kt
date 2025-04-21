@@ -21,6 +21,7 @@ import android.widget.Toast
 import kotlin.math.abs
 import android.widget.Button
 import android.util.Log
+import com.teemoyang.androidwebview.data.UserSession
 import com.teemoyang.androidwebview.databinding.ActivityMainBinding
 import org.json.JSONObject
 import java.util.UUID
@@ -48,6 +49,11 @@ import java.util.Date
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var webView: WebView
     private lateinit var binding: ActivityMainBinding
+    
+    // 用户信息相关变量
+    private lateinit var deviceId: String
+    private lateinit var userType: String
+    private lateinit var permissionId: String
     
     // 声明BeaconScanner变量
     private var beaconScanner: BeaconScanner? = null
@@ -132,6 +138,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 检查用户是否已登录，如果未登录则跳转到登录页面
+        if (!UserSession.isLoggedIn()) {
+            startActivity(Intent(this, LoginActivity::class.java))
+            finish()
+            return
+        }
+
+        // 获取用户数据并初始化成员变量
+        try {
+            val userData = UserSession.getUserData()
+            deviceId = userData.deviceId
+            userType = userData.userType ?: "1" // 默认为员工类型
+            permissionId = userData.permissionId
+            
+            // 记录用户数据到日志
+            Log.d("MainActivity", "用户数据初始化 - deviceId: $deviceId, userType: $userType, permissionId: $permissionId")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "获取用户数据失败", e)
+            // 返回登录页面
+            startActivity(Intent(this, LoginActivity::class.java))
+            finish()
+        }
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -224,9 +254,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
         
-        // get 形式 拼接 deviceId
-        val deviceId = DeviceManager.getInstance().getDeviceId()
-        val fullUrl = BASE_URL + MINIPROGRAM_PATH + "?wxOpenId=$deviceId"
+        // 使用成员变量构建URL
+        val urlParams = "?wxOpenId=$deviceId&permissionId=$permissionId&rule=$userType"
+        val fullUrl = "$BASE_URL$MINIPROGRAM_PATH$urlParams"
         
         // 记录初始URL到WebSocket日志
         WebSocketLogManager.getInstance().addLog(
@@ -254,9 +284,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      * 连接到WebSocket服务器
      */
     private fun connectToWebSocket() {
-        // 使用设备管理器获取设备ID
-        val deviceId = DeviceManager.getInstance().getDeviceId()
-        
         // 构建WebSocket URL (格式: wss://domain/locationEngine/websocket/deviceId_WeChat___timestamp)
         val timestamp = System.currentTimeMillis()
         val webSocketUrl = WS_PROTOCOL + WS_BASE_DOMAIN + WS_PATH + deviceId + "_WeChat___" + timestamp
@@ -524,21 +551,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     /**
-     * 显示设备唯一标识
+     * 显示设备ID和用户信息
      */
     private fun displayDeviceId() {
-        // 获取设备ID
-        val deviceId = DeviceManager.getInstance().getDeviceId()
-        
-        // 显示设备ID（可以根据实际布局调整）
+        // 显示设备ID
         Toast.makeText(this, "设备ID: $deviceId", Toast.LENGTH_LONG).show()
         
-        // 记录到日志
-        Log.d("MainActivity", "当前设备ID: $deviceId")
+        // 记录用户信息到日志
+        Log.d("MainActivity", "设备ID: $deviceId, 用户类型: $userType, 权限ID: $permissionId")
         
-        // 同时显示设备信息
-        val deviceInfo = DeviceManager.getInstance().getDeviceInfo()
-        Log.d("MainActivity", "设备信息: $deviceInfo")
+        // 记录到WebSocket日志
+        WebSocketLogManager.getInstance().addLog(
+            WebSocketLogManager.LogType.INFO,
+            "用户信息",
+            "设备ID: $deviceId, 用户类型: $userType, 权限ID: $permissionId"
+        )
     }
 
     /**
@@ -1031,7 +1058,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 
                 // 创建完整的定位请求数据
                 val locateJsonObj = JSONObject().apply {
-                    put("deviceId", DeviceManager.getInstance().getDeviceId())
+                    put("deviceId", deviceId)
                     put("did", didArray)
                     put("map", mapArray)
                     put("locateCount", locateCount)

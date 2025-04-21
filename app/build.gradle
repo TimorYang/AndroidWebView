@@ -48,6 +48,15 @@ dependencies {
     // AltBeacon库依赖
     implementation 'org.altbeacon:android-beacon-library:2.19.6'
     
+    // Retrofit for network requests
+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.9.3'
+    
+    // RSA加密依赖
+    implementation 'com.auth0.android:jwtdecode:2.0.0'
+    implementation 'com.nimbusds:nimbus-jose-jwt:9.10'
+    
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit
     androidTestImplementation libs.androidx.espresso.core

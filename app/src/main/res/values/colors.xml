@@ -28,4 +28,8 @@
     <color name="log_send">@color/green</color>
     <color name="log_receive">@color/purple</color>
     <color name="log_connection">@color/gray</color>
+    
+    <!-- Tab颜色 -->
+    <color name="tab_selected_text">#70a492</color>
+    <color name="tab_unselected_text">#8c9091</color>
 </resources>

@@ -2,6 +2,7 @@ package com.teemoyang.androidwebview
 
 import android.app.Application
 import android.util.Log
+import com.teemoyang.androidwebview.data.UserSession
 
 /**
  * 应用程序类
@@ -16,11 +17,22 @@ class MyApplication : Application() {
         
         Log.d(TAG, "Application created")
         
+        // 初始化用户会话
+        initUserSession()
+        
         // 初始化设备管理器
         initDeviceManager()
         
         // 初始化全局数据管理器
         initSensorDataManager()
+    }
+    
+    /**
+     * 初始化用户会话
+     */
+    private fun initUserSession() {
+        UserSession.init(this)
+        Log.d(TAG, "UserSession initialized")
     }
     
     /**
