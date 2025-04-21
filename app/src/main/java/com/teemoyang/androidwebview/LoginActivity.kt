@@ -50,6 +50,15 @@ class LoginActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // 检查用户是否已登录，如果已登录则直接进入MainActivity
+        if (UserSession.isLoggedIn()) {
+            Log.d(TAG, "用户已登录，直接进入主界面")
+            startActivity(Intent(this, MainActivity::class.java))
+            finish()
+            return
+        }
+        
         setContentView(R.layout.activity_login)
 
         // 初始化UI组件
