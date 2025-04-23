@@ -10,6 +10,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -25,7 +26,9 @@ import retrofit2.Response
 class LoginActivity : AppCompatActivity() {
 
     // UI组件
+    private  lateinit var employeeTabContainer: RelativeLayout
     private lateinit var employeeTab: TextView
+    private lateinit var visitorTabContainer: RelativeLayout
     private lateinit var visitorTab: TextView
     private lateinit var employeeTabIndicator: View
     private lateinit var visitorTabIndicator: View
@@ -69,8 +72,11 @@ class LoginActivity : AppCompatActivity() {
 
     private fun initUI() {
         // 选项卡和指示器
+        employeeTabContainer = findViewById(R.id.employeeTabContainer)
         employeeTab = findViewById(R.id.employeeTab)
+        visitorTabContainer = findViewById(R.id.visitorTabContainer)
         visitorTab = findViewById(R.id.visitorTab)
+
         employeeTabIndicator = findViewById(R.id.employeeTabIndicator)
         visitorTabIndicator = findViewById(R.id.visitorTabIndicator)
 
@@ -93,13 +99,13 @@ class LoginActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         // 选项卡切换
-        employeeTab.setOnClickListener {
+        employeeTabContainer.setOnClickListener {
             if (currentTab != TAB_EMPLOYEE) {
                 showEmployeeTab()
             }
         }
 
-        visitorTab.setOnClickListener {
+        visitorTabContainer.setOnClickListener {
             if (currentTab != TAB_VISITOR) {
                 showVisitorTab()
             }
@@ -130,8 +136,8 @@ class LoginActivity : AppCompatActivity() {
 
         // 来访导航按钮
         navigationButton.setOnClickListener {
-            // 直接进入导航界面，不需要登录
-            startActivity(Intent(this, MainActivity::class.java))
+            // 跳转第三方导航
+
         }
     }
 
@@ -143,12 +149,12 @@ class LoginActivity : AppCompatActivity() {
         visitorTab.setTypeface(null, android.graphics.Typeface.NORMAL)
         
         // 更新背景
-        employeeTab.setBackgroundResource(R.drawable.tab_selected_background)
-        visitorTab.setBackgroundResource(R.drawable.tab_unselected_background)
+        employeeTabContainer.setBackgroundResource(R.drawable.tab_selected_background)
+        visitorTabContainer.setBackgroundResource(R.drawable.tab_unselected_background)
         
         // 更新指示器
         employeeTabIndicator.visibility = View.VISIBLE
-        visitorTabIndicator.visibility = View.INVISIBLE
+        visitorTabIndicator.visibility = View.GONE
 
         // 显示相应表单
         employeeLoginForm.visibility = View.VISIBLE
@@ -166,12 +172,12 @@ class LoginActivity : AppCompatActivity() {
         employeeTab.setTypeface(null, android.graphics.Typeface.NORMAL)
         
         // 更新背景
-        visitorTab.setBackgroundResource(R.drawable.tab_selected_background)
-        employeeTab.setBackgroundResource(R.drawable.tab_unselected_background)
+        visitorTabContainer.setBackgroundResource(R.drawable.tab_selected_background)
+        employeeTabContainer.setBackgroundResource(R.drawable.tab_unselected_background)
         
         // 更新指示器
         visitorTabIndicator.visibility = View.VISIBLE
-        employeeTabIndicator.visibility = View.INVISIBLE
+        employeeTabIndicator.visibility = View.GONE
 
         // 显示相应表单
         visitorLoginForm.visibility = View.VISIBLE

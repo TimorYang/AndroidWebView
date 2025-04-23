@@ -157,12 +157,38 @@ class BeaconScanActivity : AppCompatActivity() {
             startActivity(intent)
         }
         
+        // 登出按钮
+        binding.fabLogout.setOnClickListener {
+            performLogout()
+        }
+        
         // WebSocket测试按钮（隐藏，不再使用）
         // binding.fabWebsocket.setOnClickListener {
         //     // 启动WebSocket测试页面
         //     val intent = Intent(this, WebSocketTestActivity::class.java)
         //     startActivity(intent)
         // }
+    }
+    
+    /**
+     * 执行登出操作
+     */
+    private fun performLogout() {
+        // 停止信标扫描
+        beaconScanner.stopScan()
+        
+        // 清除用户会话数据
+        val sharedPreferences = getSharedPreferences("user_prefs", MODE_PRIVATE)
+        sharedPreferences.edit().clear().apply()
+        
+        // 显示登出消息
+        Toast.makeText(this, "已登出", Toast.LENGTH_SHORT).show()
+        
+        // 跳转到主页面
+        val intent = Intent(this, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        finish()
     }
     
     /**

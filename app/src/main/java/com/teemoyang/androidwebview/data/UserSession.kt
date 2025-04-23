@@ -49,6 +49,13 @@ object UserSession {
     }
     
     /**
+     * 清除登录信息 (别名方法，与clearUserData功能相同)
+     */
+    fun clearLoginInfo() {
+        clearUserData()
+    }
+    
+    /**
      * 用户是否已登录
      */
     fun isLoggedIn(): Boolean = prefs.getBoolean(KEY_IS_LOGGED_IN, false)

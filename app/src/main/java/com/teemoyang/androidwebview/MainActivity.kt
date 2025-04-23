@@ -544,6 +544,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         binding.fabWebSocketLog.setOnClickListener {
             startActivity(Intent(this, WebSocketLogActivity::class.java))
         }
+
+        // 设置登出按钮
+        binding.fabLogout.setOnClickListener {
+            // 显示确认对话框
+            showLogoutConfirmDialog()
+        }
         
         // 设置加速度计按钮（已隐藏，不再使用）
         // binding.btnAccelerometer.setOnClickListener {
@@ -1232,6 +1238,57 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         } catch (e: Exception) {
             Log.e("MainActivity.webSocket.sendMessage", "处理WiFi数据出错: ${e.message}")
             e.printStackTrace()
+        }
+    }
+    
+    /**
+     * 显示登出确认对话框
+     */
+    private fun showLogoutConfirmDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("确认登出")
+            .setMessage("确定要退出登录吗？")
+            .setPositiveButton("确定") { _, _ ->
+                performLogout()
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+    
+    /**
+     * 执行登出操作
+     */
+    private fun performLogout() {
+        try {
+            // 关闭WebSocket连接
+            if (webSocketManager.isConnected()) {
+                webSocketManager.close()
+            }
+            
+            // 取消定时器
+            beaconTimer?.cancel()
+            beaconTimer = null
+            
+            // 停止信标扫描
+            beaconScanner?.release()
+            beaconScanner = null
+            
+            // 关闭定位服务
+            locationHelper?.stopLocationUpdates()
+            
+            // 清空用户会话
+            UserSession.clearLoginInfo()
+            
+            // 跳转到登录页面
+            val intent = Intent(this, LoginActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
+            finish()
+            
+            Toast.makeText(this, "已成功登出", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e("MainActivity", "登出失败: ${e.message}")
+            Toast.makeText(this, "登出失败: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
     

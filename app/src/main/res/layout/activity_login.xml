@@ -58,58 +58,64 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/navigationLogoImage">
 
-        <LinearLayout
+        <RelativeLayout
             android:id="@+id/employeeTabContainer"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="50dp"
             android:layout_weight="1"
+            android:background="@drawable/tab_selected_background"
+            android:gravity="center_vertical"
             android:orientation="vertical">
 
             <TextView
                 android:id="@+id/employeeTab"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/tab_selected_background"
                 android:gravity="center"
-                android:padding="16dp"
                 android:text="内部员工"
                 android:textColor="#70a492"
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
             <View
+                android:layout_below="@+id/employeeTab"
                 android:id="@+id/employeeTabIndicator"
-                android:layout_width="match_parent"
+                android:layout_marginTop="6dp"
+                android:layout_width="40dp"
+                android:layout_centerHorizontal="true"
                 android:layout_height="3dp"
                 android:background="#70a492"
                 android:visibility="visible" />
-        </LinearLayout>
+        </RelativeLayout>
 
-        <LinearLayout
+        <RelativeLayout
             android:id="@+id/visitorTabContainer"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="50dp"
             android:layout_weight="1"
+            android:background="@drawable/tab_unselected_background"
+            android:gravity="center_vertical"
             android:orientation="vertical">
 
             <TextView
                 android:id="@+id/visitorTab"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/tab_unselected_background"
                 android:gravity="center"
-                android:padding="16dp"
                 android:text="访客"
                 android:textColor="#8c9091"
                 android:textSize="16sp" />
 
             <View
+                android:layout_below="@+id/visitorTab"
                 android:id="@+id/visitorTabIndicator"
-                android:layout_width="match_parent"
+                android:layout_marginTop="6dp"
+                android:layout_width="40dp"
+                android:layout_centerHorizontal="true"
                 android:layout_height="3dp"
                 android:background="#70a492"
-                android:visibility="invisible" />
-        </LinearLayout>
+                android:visibility="visible" />
+        </RelativeLayout>
     </LinearLayout>
 
     <!-- 白色背景区域 -->
