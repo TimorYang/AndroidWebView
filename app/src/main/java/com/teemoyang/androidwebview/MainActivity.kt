@@ -46,6 +46,9 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Date
 import android.view.View
+import android.os.Handler
+import android.os.Looper
+import android.app.ProgressDialog
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var webView: WebView
@@ -544,7 +547,88 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         binding.fabWebSocketLog.setOnClickListener {
             startActivity(Intent(this, WebSocketLogActivity::class.java))
         }
-
+        
+        // 设置语音识别按钮点击事件 - 添加悬浮按钮
+        binding.fabSpeechRecognizer.setOnClickListener {
+            // 显示加载对话框
+            val loadingDialog = ProgressDialog.show(this, "请稍候", "正在获取语音识别授权...", true)
+            
+            // 使用普通线程异步处理
+            Thread {
+                try {
+                    // 获取token
+                    // TODO 运行时记得添加
+                    val accessKeyId = ""
+                    // TODO 运行时记得添加
+                    val accessKeySecret = ""
+                    val token = TokenUtil.getToken(accessKeyId, accessKeySecret)
+                    
+                    // 切换到主线程处理UI
+                    runOnUiThread {
+                        try {
+                            // 安全地关闭对话框
+                            if (loadingDialog.isShowing && !isFinishing && !isDestroyed) {
+                                loadingDialog.dismiss()
+                            }
+                            
+                            // 检查Activity是否仍然有效
+                            if (!isFinishing && !isDestroyed) {
+                                if (token != null) {
+                                    // 启动语音识别Activity
+                                    val intent = Intent(this@MainActivity, SpeechRecognizerActivity::class.java)
+                                    intent.putExtra("appkey", "aXxaY9SIOuNn2L4p")
+                                    intent.putExtra("token", token)
+                                    startActivity(intent)
+                                } else {
+                                    // 获取token失败，回退到使用AccessKey的方式
+                                    Log.e("MainActivity", "获取token失败，使用AccessKey方式")
+                                    val intent = Intent(this@MainActivity, SpeechRecognizerActivity::class.java)
+                                    // TODO 运行时记得添加
+                                    intent.putExtra("appkey", "")
+                                    // TODO 运行时记得添加
+                                    intent.putExtra("accessKey", accessKeyId)
+                                    // TODO 运行时记得添加
+                                    intent.putExtra("accessKeySecret", accessKeySecret)
+                                    startActivity(intent)
+                                }
+                            } else {
+                                
+                            }
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "UI处理异常: ${e.message}", e)
+                        }
+                    }
+                } catch (e: Exception) {
+                    // 切换到主线程处理UI
+                    runOnUiThread {
+                        try {
+                            // 安全地关闭对话框
+                            if (loadingDialog.isShowing && !isFinishing && !isDestroyed) {
+                                loadingDialog.dismiss()
+                            }
+                            
+                            // 检查Activity是否仍然有效
+                            if (!isFinishing && !isDestroyed) {
+                                Log.e("MainActivity", "获取token异常: ${e.message}", e)
+                                val intent = Intent(this@MainActivity, SpeechRecognizerActivity::class.java)
+                                // TODO 运行时记得添加
+                                intent.putExtra("appkey", "")
+                                // TODO 运行时记得添加
+                                intent.putExtra("accessKey", accessKeyId)
+                                // TODO 运行时记得添加
+                                intent.putExtra("accessKeySecret", accessKeySecret)
+                                startActivity(intent)
+                            } else {
+                                
+                            }
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "UI处理异常: ${e.message}", e)
+                        }
+                    }
+                }
+            }.start()
+        }
+        
         // 设置登出按钮
         binding.fabLogout.setOnClickListener {
             // 显示确认对话框

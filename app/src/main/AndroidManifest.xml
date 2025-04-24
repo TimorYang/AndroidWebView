@@ -12,6 +12,11 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     
+    <!-- 录音权限 - 用于语音识别 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    
     <!-- WiFi相关权限 -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
@@ -85,6 +90,12 @@
             android:exported="false"
             android:label="WebSocket日志"
             android:theme="@style/Theme.AndroidWebView.NoActionBar" />
+            
+        <activity
+            android:name=".SpeechRecognizerActivity"
+            android:exported="false"
+            android:label="语音识别"
+            android:theme="@style/Theme.AndroidWebView" />
     </application>
 
 </manifest>

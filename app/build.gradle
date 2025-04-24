@@ -53,9 +53,15 @@ dependencies {
     implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
     implementation 'com.squareup.okhttp3:logging-interceptor:4.9.3'
     
+    // Alibaba FastJSON 依赖
+    implementation 'com.alibaba:fastjson:1.2.83'
+    
     // RSA加密依赖
     implementation 'com.auth0.android:jwtdecode:2.0.0'
     implementation 'com.nimbusds:nimbus-jose-jwt:9.10'
+    
+    // 引入libs目录下的所有.aar文件
+    implementation fileTree(dir: 'libs', include: ['*.aar'])
     
     testImplementation libs.junit
     androidTestImplementation libs.androidx.junit

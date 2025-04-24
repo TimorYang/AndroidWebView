@@ -104,4 +104,17 @@
         app:fabSize="normal"
         app:tint="@android:color/white" />
 
+    <!-- 悬浮按钮：语音识别 -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabSpeechRecognizer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:contentDescription="语音识别"
+        app:layout_constraintBottom_toTopOf="@id/fabWebSocketLog"
+        app:layout_constraintStart_toStartOf="parent"
+        app:srcCompat="@android:drawable/ic_btn_speak_now"
+        app:fabSize="normal"
+        app:tint="@android:color/white" />
+
 </androidx.constraintlayout.widget.ConstraintLayout> 
