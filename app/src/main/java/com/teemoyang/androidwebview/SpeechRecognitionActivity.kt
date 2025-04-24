@@ -107,11 +107,6 @@ class SpeechRecognitionActivity : AppCompatActivity(), INativeNuiCallback {
             finish()
         }
     }
-
-    private fun doInit() {
-        // 初始化SDK
-        initializeSDK()
-    }
     
     /**
      * 加载认证信息

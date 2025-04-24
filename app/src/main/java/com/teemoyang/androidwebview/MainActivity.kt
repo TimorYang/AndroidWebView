@@ -593,6 +593,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         
         // 隐藏原来的WebSocket日志按钮
         binding.btnWebSocketLog.visibility = View.GONE
+
+        // 隐藏语音识别Demo按钮
+        binding.fabSpeechRecognizer.visibility = View.GONE
         
         // 设置悬浮按钮的点击事件
         binding.fabWebSocketLog.setOnClickListener {
@@ -600,11 +603,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         
         // 设置语音识别按钮点击事件 - 添加悬浮按钮
-        binding.fabSpeechRecognizer.setOnClickListener {
-            // 直接启动语音识别Activity
-            // token已经存储在UserSession中，不需要传递参数
-            startActivity(Intent(this, SpeechRecognizerActivity::class.java))
-        }
+        // binding.fabSpeechRecognizer.setOnClickListener {
+        //     // 直接启动语音识别Activity
+        //     // token已经存储在UserSession中，不需要传递参数
+        //     startActivity(Intent(this, SpeechRecognizerActivity::class.java))
+        // }
         
         // 设置登出按钮
         binding.fabLogout.setOnClickListener {
