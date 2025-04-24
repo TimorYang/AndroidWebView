@@ -83,6 +83,13 @@ object TokenUtil {
     }
 
     /**
+     * 获取当前Token的过期时间（Unix时间戳，单位：秒）
+     */
+    fun getTokenExpireTime(): Long {
+        return expireTime
+    }
+
+    /**
      * 获取ISO8601格式的时间
      */
     private fun getISO8601Time(date: Date?): String {

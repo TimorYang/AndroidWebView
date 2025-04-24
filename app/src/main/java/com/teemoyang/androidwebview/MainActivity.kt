@@ -49,6 +49,7 @@ import android.view.View
 import android.os.Handler
 import android.os.Looper
 import android.app.ProgressDialog
+import java.util.Properties
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var webView: WebView
@@ -175,6 +176,55 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // 在后台线程获取语音token
+        Thread {
+            try {
+                // 先检查UserSession中是否有有效token
+                if (UserSession.isSpeechTokenValid()) {
+                    // 使用UserSession中的token
+                    val token = UserSession.getSpeechToken()
+                    val expireTime = UserSession.getSpeechTokenExpireTime()
+                    Log.d("MainActivity.SpeechToken", "使用UserSession中缓存的语音token: $token, 过期时间: $expireTime")
+                } else {
+                    // UserSession中没有有效token，重新获取
+                    // 从配置文件中读取AccessKey和AccessKeySecret
+                    val properties = Properties()
+                    try {
+                        assets.open("api_keys.properties").use { inputStream ->
+                            properties.load(inputStream)
+                            
+                            val accessKeyId = properties.getProperty("alibaba.access_key", "")
+                            val accessKeySecret = properties.getProperty("alibaba.access_key_secret", "")
+                            
+                            if (accessKeyId.isNotEmpty() && accessKeySecret.isNotEmpty()) {
+                                Log.d("MainActivity.SpeechToken", "成功从配置文件获取AccessKey信息")
+                                
+                                val token = TokenUtil.getToken(accessKeyId, accessKeySecret)
+                                
+                                // 获取并保存token的过期时间
+                                if (token != null) {
+                                    val expireTime = TokenUtil.getTokenExpireTime()
+                                    
+                                    // 保存到UserSession中
+                                    UserSession.saveSpeechToken(token, expireTime)
+                                    
+                                    Log.d("MainActivity.SpeechToken", "语音token获取成功并保存到UserSession: $token, 过期时间: $expireTime")
+                                } else {
+                                    Log.e("MainActivity.SpeechToken", "语音token获取失败")
+                                }
+                            } else {
+                                Log.e("MainActivity.SpeechToken", "配置文件中AccessKey或AccessKeySecret为空")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity.SpeechToken", "读取配置文件失败: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("MainActivity.SpeechToken", "获取语音token异常: ${e.message}", e)
+            }
+        }.start()
 
         startSensorsAfterWebViewLoad()
         
@@ -551,83 +601,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         
         // 设置语音识别按钮点击事件 - 添加悬浮按钮
         binding.fabSpeechRecognizer.setOnClickListener {
-            // 显示加载对话框
-            val loadingDialog = ProgressDialog.show(this, "请稍候", "正在获取语音识别授权...", true)
-            
-            // 使用普通线程异步处理
-            Thread {
-                try {
-                    // 获取token
-                    // TODO 运行时记得添加
-                    val accessKeyId = ""
-                    // TODO 运行时记得添加
-                    val accessKeySecret = ""
-                    val token = TokenUtil.getToken(accessKeyId, accessKeySecret)
-                    
-                    // 切换到主线程处理UI
-                    runOnUiThread {
-                        try {
-                            // 安全地关闭对话框
-                            if (loadingDialog.isShowing && !isFinishing && !isDestroyed) {
-                                loadingDialog.dismiss()
-                            }
-                            
-                            // 检查Activity是否仍然有效
-                            if (!isFinishing && !isDestroyed) {
-                                if (token != null) {
-                                    // 启动语音识别Activity
-                                    val intent = Intent(this@MainActivity, SpeechRecognizerActivity::class.java)
-                                    intent.putExtra("appkey", "")
-                                    intent.putExtra("token", token)
-                                    startActivity(intent)
-                                } else {
-                                    // 获取token失败，回退到使用AccessKey的方式
-                                    Log.e("MainActivity", "获取token失败，使用AccessKey方式")
-                                    val intent = Intent(this@MainActivity, SpeechRecognizerActivity::class.java)
-                                    // TODO 运行时记得添加
-                                    intent.putExtra("appkey", "")
-                                    // TODO 运行时记得添加
-                                    intent.putExtra("accessKey", accessKeyId)
-                                    // TODO 运行时记得添加
-                                    intent.putExtra("accessKeySecret", accessKeySecret)
-                                    startActivity(intent)
-                                }
-                            } else {
-                                
-                            }
-                        } catch (e: Exception) {
-                            Log.e("MainActivity", "UI处理异常: ${e.message}", e)
-                        }
-                    }
-                } catch (e: Exception) {
-                    // 切换到主线程处理UI
-                    runOnUiThread {
-                        try {
-                            // 安全地关闭对话框
-                            if (loadingDialog.isShowing && !isFinishing && !isDestroyed) {
-                                loadingDialog.dismiss()
-                            }
-                            
-                            // 检查Activity是否仍然有效
-                            if (!isFinishing && !isDestroyed) {
-                                Log.e("MainActivity", "获取token异常: ${e.message}", e)
-                                val intent = Intent(this@MainActivity, SpeechRecognizerActivity::class.java)
-                                // TODO 运行时记得添加
-                                intent.putExtra("appkey", "")
-                                // TODO 运行时记得添加
-                                intent.putExtra("accessKey", "accessKeyId")
-                                // TODO 运行时记得添加
-                                intent.putExtra("accessKeySecret", "accessKeySecret")
-                                startActivity(intent)
-                            } else {
-                                
-                            }
-                        } catch (e: Exception) {
-                            Log.e("MainActivity", "UI处理异常: ${e.message}", e)
-                        }
-                    }
-                }
-            }.start()
+            // 直接启动语音识别Activity
+            // token已经存储在UserSession中，不需要传递参数
+            startActivity(Intent(this, SpeechRecognizerActivity::class.java))
         }
         
         // 设置登出按钮

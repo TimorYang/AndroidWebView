@@ -40,6 +40,7 @@ import java.util.ArrayList
 import java.util.HashMap
 import java.util.Properties
 import java.util.concurrent.LinkedBlockingQueue
+import com.teemoyang.androidwebview.data.UserSession
 
 /**
  * 阿里云一句话语音识别示例Activity
@@ -94,13 +95,16 @@ class SpeechRecognizerActivity : Activity(), INativeNuiCallback, AdapterView.OnI
 
         // 从配置文件读取密钥信息
         loadApiKeysFromConfig()
+        
+        // 从UserSession获取token
+        loadTokenFromUserSession()
 
         val version = nui_instance.GetVersion()
         Log.i(TAG, "current sdk version: $version")
         val version_text = "内部SDK版本号:$version"
         runOnUiThread { Toast.makeText(this@SpeechRecognizerActivity, version_text, Toast.LENGTH_SHORT).show() }
 
-        // 获取传递的参数
+        // 从Intent获取参数（已废弃，保留代码兼容性）
         intent?.let {
             val appkey = it.getStringExtra("appkey")
             val token = it.getStringExtra("token")
@@ -117,7 +121,7 @@ class SpeechRecognizerActivity : Activity(), INativeNuiCallback, AdapterView.OnI
             if (!sk.isNullOrEmpty()) g_sk = sk
             if (!url.isNullOrEmpty()) g_url = url
 
-            Log.i(TAG, "Get access ->\n Appkey:$g_appkey\n Token:$g_token" +
+            Log.i(TAG, "Get access from intent ->\n Appkey:$g_appkey\n Token:$g_token" +
                     "\n AccessKey:$g_ak\n AccessKeySecret:$g_sk" +
                     "\n STS_Token:$g_sts_token" +
                     "\n URL:$g_url")
@@ -434,6 +438,17 @@ class SpeechRecognizerActivity : Activity(), INativeNuiCallback, AdapterView.OnI
         var params = ""
         try {
             var dialog_param = JSONObject()
+            
+            // 检查UserSession中的token
+            if (UserSession.isSpeechTokenValid()) {
+                val token = UserSession.getSpeechToken()
+                if (token != null && token != g_token) {
+                    g_token = token
+                    Log.i(TAG, "从UserSession更新token: $token")
+                    Auth.setToken(g_token)
+                }
+            }
+            
             // 运行过程中可以在startDialog时更新临时参数，尤其是更新过期token
             val distance_expire_time_5m: Long = 300
             dialog_param = Auth.refreshTokenIfNeed(dialog_param, distance_expire_time_5m)
@@ -731,6 +746,28 @@ class SpeechRecognizerActivity : Activity(), INativeNuiCallback, AdapterView.OnI
             g_ak = ""
             g_sk = ""
             g_url = ""
+        }
+    }
+
+    /**
+     * 从UserSession获取语音token
+     */
+    private fun loadTokenFromUserSession() {
+        try {
+            // 检查UserSession中是否有有效token
+            if (UserSession.isSpeechTokenValid()) {
+                val token = UserSession.getSpeechToken()
+                if (token != null) {
+                    g_token = token
+                    Log.i(TAG, "成功从UserSession获取token: $token")
+                } else {
+                    Log.e(TAG, "UserSession中的token为null")
+                }
+            } else {
+                Log.e(TAG, "UserSession中无有效token或token已过期")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "从UserSession获取token异常: ${e.message}")
         }
     }
 } 

@@ -67,7 +67,6 @@ class SpeechRecognitionActivity : AppCompatActivity() {
             )
         }
     }
-
     /*
     private fun initSpeechRecognizer() {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {

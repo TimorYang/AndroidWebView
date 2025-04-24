@@ -16,6 +16,9 @@ object UserSession {
     private const val KEY_DEVICE_ID = "device_id"
     private const val KEY_PERMISSION_ID = "permission_id"
     private const val KEY_BUILDING_ID = "building_id"
+    // 添加语音token相关常量
+    private const val KEY_SPEECH_TOKEN = "speech_token"
+    private const val KEY_SPEECH_TOKEN_EXPIRE_TIME = "speech_token_expire_time"
     
     private lateinit var prefs: SharedPreferences
     
@@ -39,6 +42,38 @@ object UserSession {
             putString(KEY_PERMISSION_ID, userData.permissionId)
             putString(KEY_BUILDING_ID, userData.buildingId)
         }.apply()
+    }
+    
+    /**
+     * 保存语音token信息
+     */
+    fun saveSpeechToken(token: String, expireTime: Long) {
+        prefs.edit().apply {
+            putString(KEY_SPEECH_TOKEN, token)
+            putLong(KEY_SPEECH_TOKEN_EXPIRE_TIME, expireTime)
+        }.apply()
+    }
+    
+    /**
+     * 获取语音token
+     */
+    fun getSpeechToken(): String? = prefs.getString(KEY_SPEECH_TOKEN, null)
+    
+    /**
+     * 获取语音token过期时间
+     */
+    fun getSpeechTokenExpireTime(): Long = prefs.getLong(KEY_SPEECH_TOKEN_EXPIRE_TIME, 0)
+    
+    /**
+     * 检查语音token是否有效
+     * @param bufferTime 提前多少秒判定为过期，默认300秒(5分钟)
+     */
+    fun isSpeechTokenValid(bufferTime: Long = 300): Boolean {
+        val token = getSpeechToken()
+        val expireTime = getSpeechTokenExpireTime()
+        val currentTime = System.currentTimeMillis() / 1000
+        
+        return token != null && expireTime > 0 && currentTime < (expireTime - bufferTime)
     }
     
     /**
