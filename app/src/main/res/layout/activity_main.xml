@@ -117,4 +117,18 @@
         app:fabSize="normal"
         app:tint="@android:color/white" />
 
+    <!-- 新增直接进入语音识别界面按钮 -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabSpeechRecognitionActivity"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:contentDescription="语音识别界面"
+        app:layout_constraintBottom_toTopOf="@id/fabLogout"
+        app:layout_constraintStart_toEndOf="@id/fabSpeechRecognizer"
+        app:srcCompat="@android:drawable/ic_menu_directions"
+        app:fabSize="normal"
+        app:tint="@android:color/white"
+        app:backgroundTint="#6AC3A9" />
+
 </androidx.constraintlayout.widget.ConstraintLayout> 

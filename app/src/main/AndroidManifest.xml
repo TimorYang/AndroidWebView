@@ -96,6 +96,12 @@
             android:exported="false"
             android:label="语音识别"
             android:theme="@style/Theme.AndroidWebView" />
+        
+        <!-- 添加语音识别活动 -->
+        <activity
+            android:name=".SpeechRecognitionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MaterialComponents.Light.NoActionBar" />
     </application>
 
 </manifest>

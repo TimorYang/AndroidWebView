@@ -132,6 +132,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     companion object {
         private const val PREFS_NAME = "WebViewAppPrefs"
         private const val KEY_FIRST_TIME_PERMISSION = "first_time_location_permission"
+        private const val SPEECH_RECOGNITION_REQUEST_CODE = 1001
     }
     
     // 添加字节转十六进制的工具方法
@@ -576,7 +577,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                                 if (token != null) {
                                     // 启动语音识别Activity
                                     val intent = Intent(this@MainActivity, SpeechRecognizerActivity::class.java)
-                                    intent.putExtra("appkey", "aXxaY9SIOuNn2L4p")
+                                    intent.putExtra("appkey", "")
                                     intent.putExtra("token", token)
                                     startActivity(intent)
                                 } else {
@@ -614,9 +615,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                                 // TODO 运行时记得添加
                                 intent.putExtra("appkey", "")
                                 // TODO 运行时记得添加
-                                intent.putExtra("accessKey", accessKeyId)
+                                intent.putExtra("accessKey", "accessKeyId")
                                 // TODO 运行时记得添加
-                                intent.putExtra("accessKeySecret", accessKeySecret)
+                                intent.putExtra("accessKeySecret", "accessKeySecret")
                                 startActivity(intent)
                             } else {
                                 
@@ -644,6 +645,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // binding.btnWebSocketTest.setOnClickListener {
         //    startActivity(Intent(this, WebSocketTestActivity::class.java))
         // }
+
+        // 新添加的直接进入SpeechRecognitionActivity的按钮
+        binding.fabSpeechRecognitionActivity.setOnClickListener {
+            // 直接启动SpeechRecognitionActivity
+            startActivityForResult(Intent(this, SpeechRecognitionActivity::class.java), SPEECH_RECOGNITION_REQUEST_CODE)
+        }
+        
     }
 
     /**
@@ -902,6 +910,42 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // 处理蓝牙开启结果
         if (requestCode == BeaconScanner.BLUETOOTH_ENABLE_REQUEST_CODE) {
             beaconScanner?.handleBluetoothEnableResult(requestCode, resultCode)
+        }
+        // 处理语音识别结果
+        else if (requestCode == SPEECH_RECOGNITION_REQUEST_CODE && resultCode == RESULT_OK) {
+            val destination = data?.getStringExtra("DESTINATION")
+            if (!destination.isNullOrEmpty()) {
+                Toast.makeText(this, "正在导航到: $destination", Toast.LENGTH_SHORT).show()
+                
+                // 这里可以添加导航逻辑，比如在WebView中加载相应的导航链接
+                navigateToDestination(destination)
+            }
+        }
+    }
+    
+    /**
+     * 导航到指定目的地
+     */
+    private fun navigateToDestination(destination: String) {
+        try {
+            // 对目的地进行URL编码
+            val encodedDestination = java.net.URLEncoder.encode(destination, "UTF-8")
+            
+            // 构建导航URL
+            val navigateUrl = "$BASE_URL$MINIPROGRAM_PATH?navigate=$encodedDestination&wxOpenId=$deviceId&permissionId=$permissionId&rule=$userType"
+            
+            // 加载导航URL
+            webView.loadUrl(navigateUrl)
+            
+            // 记录导航操作到WebSocket日志
+            WebSocketLogManager.getInstance().addLog(
+                WebSocketLogManager.LogType.INFO,
+                "导航请求",
+                "目的地: $destination, URL: $navigateUrl"
+            )
+        } catch (e: Exception) {
+            Log.e("MainActivity", "导航错误: ${e.message}")
+            Toast.makeText(this, "导航失败: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
     

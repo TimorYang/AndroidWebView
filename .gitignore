@@ -32,3 +32,6 @@ google-services.json
 # Android Profiling
 *.hprof
 .DS_Store
+
+# API密钥配置文件
+app/src/main/assets/api_keys.properties

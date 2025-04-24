@@ -38,6 +38,7 @@ import java.io.IOException
 import java.io.OutputStream
 import java.util.ArrayList
 import java.util.HashMap
+import java.util.Properties
 import java.util.concurrent.LinkedBlockingQueue
 
 /**
@@ -51,13 +52,10 @@ class SpeechRecognizerActivity : Activity(), INativeNuiCallback, AdapterView.OnI
     }
 
     // 阿里云认证信息
-    // TODO 运行时记得添加
     private var g_appkey = ""
     private var g_token = ""
     private var g_sts_token = ""
-    // TODO 运行时记得添加
     private var g_ak = ""
-    // TODO 运行时记得添加
     private var g_sk = ""
     private var g_url = ""
 
@@ -94,6 +92,9 @@ class SpeechRecognizerActivity : Activity(), INativeNuiCallback, AdapterView.OnI
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_speech_recognizer)
 
+        // 从配置文件读取密钥信息
+        loadApiKeysFromConfig()
+
         val version = nui_instance.GetVersion()
         Log.i(TAG, "current sdk version: $version")
         val version_text = "内部SDK版本号:$version"
@@ -101,12 +102,20 @@ class SpeechRecognizerActivity : Activity(), INativeNuiCallback, AdapterView.OnI
 
         // 获取传递的参数
         intent?.let {
-            g_appkey = it.getStringExtra("appkey") ?: ""
-            g_token = it.getStringExtra("token") ?: ""
-            g_sts_token = it.getStringExtra("stsToken") ?: ""
-            g_ak = it.getStringExtra("accessKey") ?: ""
-            g_sk = it.getStringExtra("accessKeySecret") ?: ""
-            g_url = it.getStringExtra("url") ?: ""
+            val appkey = it.getStringExtra("appkey")
+            val token = it.getStringExtra("token")
+            val stsToken = it.getStringExtra("stsToken")
+            val ak = it.getStringExtra("accessKey")
+            val sk = it.getStringExtra("accessKeySecret")
+            val url = it.getStringExtra("url")
+            
+            // 只有当Intent中传入了参数才覆盖配置文件中的值
+            if (!appkey.isNullOrEmpty()) g_appkey = appkey
+            if (!token.isNullOrEmpty()) g_token = token
+            if (!stsToken.isNullOrEmpty()) g_sts_token = stsToken
+            if (!ak.isNullOrEmpty()) g_ak = ak
+            if (!sk.isNullOrEmpty()) g_sk = sk
+            if (!url.isNullOrEmpty()) g_url = url
 
             Log.i(TAG, "Get access ->\n Appkey:$g_appkey\n Token:$g_token" +
                     "\n AccessKey:$g_ak\n AccessKeySecret:$g_sk" +
@@ -693,5 +702,35 @@ class SpeechRecognizerActivity : Activity(), INativeNuiCallback, AdapterView.OnI
 
     override fun onNuiLogTrackCallback(level: Constants.LogLevel, log: String) {
         Log.i(TAG, "onNuiLogTrackCallback log level:$level, message -> $log")
+    }
+
+    // 从配置文件读取密钥信息
+    private fun loadApiKeysFromConfig() {
+        try {
+            val properties = Properties()
+            
+            // 尝试从assets目录读取配置
+            assets.open("api_keys.properties").use { inputStream ->
+                properties.load(inputStream)
+                
+                g_appkey = properties.getProperty("alibaba.appkey", "")
+                g_token = properties.getProperty("alibaba.token", "")
+                g_sts_token = properties.getProperty("alibaba.sts_token", "")
+                g_ak = properties.getProperty("alibaba.access_key", "")
+                g_sk = properties.getProperty("alibaba.access_key_secret", "")
+                g_url = properties.getProperty("alibaba.url", "")
+                
+                Log.i(TAG, "成功从配置文件读取API密钥")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "读取API密钥失败: ${e.message}")
+            // 读取失败时使用默认空值
+            g_appkey = ""
+            g_token = ""
+            g_sts_token = ""
+            g_ak = ""
+            g_sk = ""
+            g_url = ""
+        }
     }
 } 
