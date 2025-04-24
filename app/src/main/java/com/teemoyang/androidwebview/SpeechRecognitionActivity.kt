@@ -106,6 +106,9 @@ class SpeechRecognitionActivity : AppCompatActivity(), INativeNuiCallback {
         binding.btnBack.setOnClickListener {
             finish()
         }
+
+        // 处理自定义提示和建议
+        processIntentExtras()
     }
     
     /**
@@ -382,13 +385,13 @@ class SpeechRecognitionActivity : AppCompatActivity(), INativeNuiCallback {
         // 处理识别到的文本
         val normalizedText = text.trim().toLowerCase(Locale.getDefault())
         showSearchResults(normalizedText)
-        handler.postDelayed({
-            navigateToDestination(text)
-        }, 1000)
+        // 立即调用navigateToDestination，不需要延迟
+        navigateToDestination(text)
     }
 
     private fun navigateToDestination(destination: String) {
-        Toast.makeText(this, "正在导航到: $destination", Toast.LENGTH_SHORT).show()
+        Log.d(TAG, "navigateToDestination: 返回结果 '$destination' 给MainActivity")
+        Toast.makeText(this, "语音识别结果: $destination", Toast.LENGTH_SHORT).show()
         
         // 这里可以返回结果给MainActivity或直接处理导航
         val resultIntent = Intent().apply {
@@ -408,10 +411,10 @@ class SpeechRecognitionActivity : AppCompatActivity(), INativeNuiCallback {
         // 修改提示文字
         binding.tvListening.text = "按住说话"
         
-        // 一秒后关闭页面
-        handler.postDelayed({
-            finish()
-        }, 1000)
+        // 移除一秒后关闭页面的代码，由navigateToDestination处理
+        // handler.postDelayed({
+        //    finish()
+        // }, 1000)
     }
     
     // 启动脉动动画
@@ -863,5 +866,54 @@ class SpeechRecognitionActivity : AppCompatActivity(), INativeNuiCallback {
             Log.e(TAG, "生成对话参数异常: ${e.message}")
         }
         return params
+    }
+
+    /**
+     * 处理Intent中传入的额外参数
+     */
+    private fun processIntentExtras() {
+        try {
+            // 处理自定义提示文字
+            val prompt = intent.getStringExtra("PROMPT")
+            if (!prompt.isNullOrEmpty()) {
+                binding.tvPrompt.text = prompt
+            }
+            
+            // 处理自定义建议选项
+            val suggestionsJson = intent.getStringExtra("SUGGESTIONS")
+            if (!suggestionsJson.isNullOrEmpty()) {
+                try {
+                    val suggestionArray = com.alibaba.fastjson.JSON.parseArray(suggestionsJson, String::class.java)
+                    
+                    // 更新UI上的建议选项
+                    if (suggestionArray.size > 0) {
+                        binding.tvSuggestion1.text = suggestionArray[0]
+                        binding.tvSuggestion1.visibility = View.VISIBLE
+                    } else {
+                        binding.tvSuggestion1.visibility = View.GONE
+                    }
+                    
+                    if (suggestionArray.size > 1) {
+                        binding.tvSuggestion2.text = suggestionArray[1]
+                        binding.tvSuggestion2.visibility = View.VISIBLE
+                    } else {
+                        binding.tvSuggestion2.visibility = View.GONE
+                    }
+                    
+                    if (suggestionArray.size > 2) {
+                        binding.tvSuggestion3.text = suggestionArray[2]
+                        binding.tvSuggestion3.visibility = View.VISIBLE
+                    } else {
+                        binding.tvSuggestion3.visibility = View.GONE
+                    }
+                    
+                    Log.d(TAG, "已应用自定义建议选项: $suggestionsJson")
+                } catch (e: Exception) {
+                    Log.e(TAG, "解析建议选项JSON失败: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "处理Intent额外参数失败: ${e.message}")
+        }
     }
 } 

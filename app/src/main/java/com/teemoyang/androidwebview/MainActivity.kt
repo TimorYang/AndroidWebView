@@ -49,6 +49,7 @@ import android.view.View
 import android.os.Handler
 import android.os.Looper
 import android.app.ProgressDialog
+import com.teemoyang.androidwebview.js.WebAppInterface
 import java.util.Properties
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
@@ -129,11 +130,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // 添加标志，用于追踪是否是首次获取权限
     private var isFirstTimePermissionGrant = true
     
-    // SharedPreferences相关常量
+    // 定义WebAppInterface的成员变量
+    private lateinit var webAppInterface: WebAppInterface
+    
+    // 修改原有的SPEECH_RECOGNITION_REQUEST_CODE
     companion object {
         private const val PREFS_NAME = "WebViewAppPrefs"
         private const val KEY_FIRST_TIME_PERMISSION = "first_time_location_permission"
-        private const val SPEECH_RECOGNITION_REQUEST_CODE = 1001
+        // 使用WebAppInterface中定义的常量
+        private const val SPEECH_RECOGNITION_REQUEST_CODE = WebAppInterface.SPEECH_RECOGNITION_REQUEST_CODE
     }
     
     // 添加字节转十六进制的工具方法
@@ -251,6 +256,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             // 启用地理位置
             setGeolocationEnabled(true)
         }
+
+        // 创建WebAppInterface实例
+        webAppInterface = WebAppInterface(this, webView, deviceId, userType, permissionId)
+        
+        // 添加JavaScript接口
+        webView.addJavascriptInterface(webAppInterface, "Android")
 
         // 设置WebView加载完成监听器
         webView.webViewClient = object : WebViewClient() {
@@ -628,7 +639,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // 新添加的直接进入SpeechRecognitionActivity的按钮
         binding.fabSpeechRecognitionActivity.setOnClickListener {
             // 直接启动SpeechRecognitionActivity
-            startActivityForResult(Intent(this, SpeechRecognitionActivity::class.java), SPEECH_RECOGNITION_REQUEST_CODE)
+            // 加载语音识别演示页面
+            // 如果webView URL 是本地文件，则重新加载 
+            if (webView.url?.startsWith("file://") == true) {
+                val urlParams = "?wxOpenId=$deviceId&permissionId=$permissionId&rule=$userType"
+                val fullUrl = "$BASE_URL$MINIPROGRAM_PATH$urlParams"
+                webView.loadUrl(fullUrl)
+            } else {
+                loadSpeechRecognitionDemo()
+            }
+            // startActivityForResult(Intent(this, SpeechRecognitionActivity::class.java), SPEECH_RECOGNITION_REQUEST_CODE)
         }
         
     }
@@ -886,47 +906,33 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         
+        Log.d("MainActivity", "onActivityResult - requestCode: $requestCode, resultCode: $resultCode")
+        
         // 处理蓝牙开启结果
         if (requestCode == BeaconScanner.BLUETOOTH_ENABLE_REQUEST_CODE) {
             beaconScanner?.handleBluetoothEnableResult(requestCode, resultCode)
         }
         // 处理语音识别结果
-        else if (requestCode == SPEECH_RECOGNITION_REQUEST_CODE && resultCode == RESULT_OK) {
+        else if (requestCode == SPEECH_RECOGNITION_REQUEST_CODE) {
+            // 打印更多日志以便调试
+            Log.d("MainActivity", "接收到语音识别结果 - resultCode: $resultCode, data: $data")
+            
+            // 不论resultCode，都尝试处理数据
             val destination = data?.getStringExtra("DESTINATION")
             if (!destination.isNullOrEmpty()) {
-                Toast.makeText(this, "正在导航到: $destination", Toast.LENGTH_SHORT).show()
+                Log.d("MainActivity", "收到语音识别结果: $destination")
+                Toast.makeText(this, "语音识别结果: $destination", Toast.LENGTH_SHORT).show()
                 
-                // 这里可以添加导航逻辑，比如在WebView中加载相应的导航链接
-                navigateToDestination(destination)
+                // 直接将结果发送给JS
+                webAppInterface.sendSpeechResultToJs(destination)
+            } else {
+                Log.e("MainActivity", "语音识别结果为空")
+                // 发送一个默认消息到JS，表示识别失败
+                webAppInterface.sendSpeechResultToJs("语音识别未返回结果")
             }
         }
     }
     
-    /**
-     * 导航到指定目的地
-     */
-    private fun navigateToDestination(destination: String) {
-        try {
-            // 对目的地进行URL编码
-            val encodedDestination = java.net.URLEncoder.encode(destination, "UTF-8")
-            
-            // 构建导航URL
-            val navigateUrl = "$BASE_URL$MINIPROGRAM_PATH?navigate=$encodedDestination&wxOpenId=$deviceId&permissionId=$permissionId&rule=$userType"
-            
-            // 加载导航URL
-            webView.loadUrl(navigateUrl)
-            
-            // 记录导航操作到WebSocket日志
-            WebSocketLogManager.getInstance().addLog(
-                WebSocketLogManager.LogType.INFO,
-                "导航请求",
-                "目的地: $destination, URL: $navigateUrl"
-            )
-        } catch (e: Exception) {
-            Log.e("MainActivity", "导航错误: ${e.message}")
-            Toast.makeText(this, "导航失败: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
     
     /**
      * 启动WiFi扫描
@@ -1396,6 +1402,30 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         } catch (e: Exception) {
             Log.e("MainActivity", "登出失败: ${e.message}")
             Toast.makeText(this, "登出失败: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+    
+    /**
+     * 加载语音识别演示页面
+     */
+    private fun loadSpeechRecognitionDemo() {
+        try {
+            // 从assets目录加载HTML文件
+            val demoUrl = "file:///android_asset/speech_recognition_demo.html"
+            Log.d("MainActivity", "加载语音识别演示页面: $demoUrl")
+            
+            // 在WebView中加载HTML
+            webView.loadUrl(demoUrl)
+            
+            // 记录到WebSocket日志
+            WebSocketLogManager.getInstance().addLog(
+                WebSocketLogManager.LogType.INFO,
+                "加载语音识别演示页面",
+                demoUrl
+            )
+        } catch (e: Exception) {
+            Log.e("MainActivity", "加载语音识别演示页面失败: ${e.message}")
+            Toast.makeText(this, "加载演示页面失败: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
     

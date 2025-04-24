@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>语音识别演示</title>
+    <style>
+        body {
+            font-family: 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 12px 25px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 20px 0;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            background-color: #e9f5ff;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 20px;
+            border-left: 3px solid #007bff;
+            text-align: left;
+            display: none;
+        }
+        .result p {
+            margin: 5px 0;
+            font-size: 18px;
+            word-break: break-all;
+        }
+        .debug-button {
+            background-color: #6c757d;
+            margin-top: 30px;
+            font-size: 14px;
+            padding: 8px 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>语音识别演示</h1>
+        
+        <button onclick="startSpeechRecognition()">开始语音识别</button>
+        
+        <div class="result" id="resultBox">
+            <p><strong>识别结果：</strong><span id="resultText"></span></p>
+        </div>
+        
+        <button onclick="testCallback()" class="debug-button">测试回调(Debug)</button>
+    </div>
+    
+    <script>
+        // 开始语音识别
+        function startSpeechRecognition() {
+            if (window.Android) {
+                Android.openSpeechRecognition();
+                console.log('已调用Android.openSpeechRecognition()');
+            } else {
+                alert('Android接口不可用');
+                console.error('Android接口不可用');
+            }
+        }
+        
+        // 测试回调函数
+        function testCallback() {
+            console.log('手动触发回调测试');
+            if (window.onSpeechResult) {
+                window.onSpeechResult('测试识别结果 - ' + new Date().toLocaleTimeString());
+                console.log('已手动触发onSpeechResult回调');
+            } else {
+                alert('回调函数未定义');
+                console.error('onSpeechResult回调函数未定义');
+            }
+        }
+        
+        // 语音识别结果回调函数
+        window.onSpeechResult = function(result) {
+            console.log('收到语音识别结果:', result);
+            document.getElementById('resultText').innerText = result;
+            document.getElementById('resultBox').style.display = 'block';
+            
+            // 移除alert弹窗
+            // alert('收到识别结果: ' + result);
+        };
+        
+        // 页面加载完成时的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('页面已加载，window.onSpeechResult = ', window.onSpeechResult ? '已定义' : '未定义');
+            console.log('window.Android = ', window.Android ? '已定义' : '未定义');
+        });
+    </script>
+</body>
+</html> 
