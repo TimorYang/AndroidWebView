@@ -14,6 +14,7 @@ import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.teemoyang.androidwebview.api.ApiClient
 import com.teemoyang.androidwebview.data.UserSession
 import com.teemoyang.androidwebview.model.LoginRequest
@@ -41,6 +42,9 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var togglePassword: ImageView
     private lateinit var loginButton: Button
     private lateinit var navigationButton: Button
+    
+    // 底部弹窗
+    private lateinit var mapSelectionDialog: BottomSheetDialog
 
     // 当前选中的标签
     private var currentTab = TAB_EMPLOYEE
@@ -136,8 +140,8 @@ class LoginActivity : AppCompatActivity() {
 
         // 来访导航按钮
         navigationButton.setOnClickListener {
-            // 跳转第三方导航
-
+            // 显示地图选择底部弹窗
+            showMapSelectionDialog()
         }
     }
 
@@ -325,6 +329,181 @@ class LoginActivity : AppCompatActivity() {
             loginButton.text = "登录中..."
         } else {
             loginButton.text = if (currentTab == TAB_EMPLOYEE) "登录" else "访客登录"
+        }
+    }
+    
+    /**
+     * 显示地图选择底部弹窗
+     */
+    private fun showMapSelectionDialog() {
+        mapSelectionDialog = BottomSheetDialog(this)
+        val dialogView = layoutInflater.inflate(R.layout.dialog_map_selection, null)
+        mapSelectionDialog.setContentView(dialogView)
+        
+        // 高德地图选项
+        dialogView.findViewById<LinearLayout>(R.id.amapOption).setOnClickListener {
+            openAmapNavigation()
+            mapSelectionDialog.dismiss()
+        }
+        
+        // 百度地图选项
+        dialogView.findViewById<LinearLayout>(R.id.baiduMapOption).setOnClickListener {
+            openBaiduMapNavigation()
+            mapSelectionDialog.dismiss()
+        }
+        
+        // 华为地图选项
+        dialogView.findViewById<LinearLayout>(R.id.huaweiMapOption).setOnClickListener {
+            openHuaweiMapNavigation()
+            mapSelectionDialog.dismiss()
+        }
+        
+        // 取消按钮
+        dialogView.findViewById<Button>(R.id.cancelButton).setOnClickListener {
+            mapSelectionDialog.dismiss()
+        }
+        
+        mapSelectionDialog.show()
+    }
+    
+    /**
+     * 打开高德地图导航
+     * 使用URL Scheme方式拉起高德地图APP导航到北京天安门
+     */
+    private fun openAmapNavigation() {
+        try {
+            // 使用高德地图官方示例方式
+            val intent = Intent()
+            intent.action = Intent.ACTION_VIEW
+            intent.addCategory(Intent.CATEGORY_DEFAULT)
+            
+            // 天安门的经纬度 (116.397428,39.90923)
+            // 参数说明：
+            // sourceApplication: 应用名称
+            // poiname: 目的地名称
+            // lat/lon: 终点纬度/经度
+            // dev: 是否偏移(0:gps坐标，1:高德坐标)
+            val uri = android.net.Uri.parse(
+                "androidamap://navi?" +
+                "sourceApplication=${getString(R.string.app_name)}" +
+                "&poiname=北京天安门" +
+                "&lat=39.90923" +
+                "&lon=116.397428" +
+                "&dev=0"
+            )
+            intent.data = uri
+            
+            // 检查高德地图是否已安装
+            if (intent.resolveActivity(packageManager) != null) {
+                startActivity(intent)
+            } else {
+                // 未安装高德地图APP，跳转到高德地图网页版
+                val webUri = "https://uri.amap.com/navigation?" +
+                        "to=116.397428,39.90923,北京天安门" +
+                        "&mode=car" +
+                        "&src=${getString(R.string.app_name)}"
+                val webIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(webUri))
+                startActivity(webIntent)
+                
+                Toast.makeText(this, "您未安装高德地图APP，已为您跳转到网页版导航", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "打开高德地图失败", e)
+            Toast.makeText(this, "打开高德地图失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    /**
+     * 打开百度地图导航
+     * 使用URL Scheme方式拉起百度地图APP导航到北京天安门
+     */
+    private fun openBaiduMapNavigation() {
+        try {
+            // 百度地图URI参数说明
+            // origin：起点坐标（可选）
+            // destination：终点坐标 lat,lng 或者 name（必选）
+            // coord_type：坐标类型，可选参数（bd09ll/gcj02/wgs84）
+            // mode：导航模式，默认为driving（可选）
+            // src：调用来源，开发者名称（必选）
+            
+            // 天安门坐标（注意：百度地图使用的是bd09ll坐标系）
+            // 这里使用的是转换后的百度坐标：116.404, 39.915
+            
+            val intent = Intent()
+            intent.action = Intent.ACTION_VIEW
+            intent.addCategory(Intent.CATEGORY_DEFAULT)
+            
+            val uri = android.net.Uri.parse(
+                "baidumap://map/direction?" +
+                "destination=name:北京天安门|latlng:39.915,116.404" +
+                "&coord_type=bd09ll" +
+                "&mode=driving" +
+                "&src=${getString(R.string.app_name)}"
+            )
+            intent.data = uri
+            
+            // 检查百度地图是否已安装
+            if (intent.resolveActivity(packageManager) != null) {
+                startActivity(intent)
+            } else {
+                // 未安装百度地图APP，跳转到百度地图网页版
+                val webUri = "https://map.baidu.com/dir/" +
+                        "?origin=我的位置" +
+                        "&destination=北京天安门" +
+                        "&mode=driving" +
+                        "&src=${getString(R.string.app_name)}"
+                val webIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(webUri))
+                startActivity(webIntent)
+                
+                Toast.makeText(this, "您未安装百度地图APP，已为您跳转到网页版导航", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "打开百度地图失败", e)
+            Toast.makeText(this, "打开百度地图失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    /**
+     * 打开华为地图导航
+     * 使用URL Scheme方式拉起华为地图APP导航到北京天安门
+     */
+    private fun openHuaweiMapNavigation() {
+        try {
+            // 华为地图URI参数说明
+            // type：调用的服务类型，99代表调起导航
+            // sourceApplication：调用来源，应用名称
+            // daddr：目标位置的坐标，格式为"纬度,经度"或地名
+            // dname：目标位置名称
+            // dlat：目标位置纬度（优先于daddr参数中的纬度）
+            // dlon：目标位置经度（优先于daddr参数中的经度）
+            
+            // 天安门坐标（GCJ-02坐标系）：39.90923,116.397428
+            
+            val intent = Intent()
+            intent.action = Intent.ACTION_VIEW
+            intent.addCategory(Intent.CATEGORY_DEFAULT)
+            
+            val uri = android.net.Uri.parse(
+                "mapapp://navigation?" +
+                "type=99" +
+                "&sourceApplication=${getString(R.string.app_name)}" +
+                "&dlat=39.90923" +
+                "&dlon=116.397428" +
+                "&dname=北京天安门" +
+                "&nav_type=0"  // 导航类型，0表示驾车导航
+            )
+            intent.data = uri
+            
+            // 尝试直接启动，由于华为地图相对小众，这里直接尝试启动
+            try {
+                startActivity(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "未安装华为地图APP", e)
+                Toast.makeText(this, "未安装华为地图APP", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "打开华为地图失败", e)
+            Toast.makeText(this, "打开华为地图失败: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 } 
