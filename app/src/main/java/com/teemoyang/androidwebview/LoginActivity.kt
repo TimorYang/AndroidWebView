@@ -383,29 +383,23 @@ class LoginActivity : AppCompatActivity() {
             // poiname: 目的地名称
             // lat/lon: 终点纬度/经度
             // dev: 是否偏移(0:gps坐标，1:高德坐标)
+            // t: t = 0（驾车）= 1（公交）= 2（步行）= 3（骑行）= 4（火车）= 5（长途客车）
+            // （骑行仅在V7.8.8以上版本支持）
             val uri = android.net.Uri.parse(
-                "androidamap://navi?" +
+                "amapuri://route/plan/?" +
                 "sourceApplication=${getString(R.string.app_name)}" +
-                "&poiname=北京天安门" +
-                "&lat=39.90923" +
-                "&lon=116.397428" +
-                "&dev=0"
+                "&dname=北京天安门" +
+                "&dlat=39.90923" +
+                "&dlon=116.397428" +
+                "&dev=0" +
+                "&t=0"
             )
             intent.data = uri
-            
-            // 检查高德地图是否已安装
-            if (intent.resolveActivity(packageManager) != null) {
+            try {
                 startActivity(intent)
-            } else {
-                // 未安装高德地图APP，跳转到高德地图网页版
-                val webUri = "https://uri.amap.com/navigation?" +
-                        "to=116.397428,39.90923,北京天安门" +
-                        "&mode=car" +
-                        "&src=${getString(R.string.app_name)}"
-                val webIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(webUri))
-                startActivity(webIntent)
-                
-                Toast.makeText(this, "您未安装高德地图APP，已为您跳转到网页版导航", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Log.e(TAG, "未安装高德地图APP", e)
+                Toast.makeText(this, "未安装高德地图APP", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             Log.e(TAG, "打开高德地图失败", e)
@@ -441,21 +435,12 @@ class LoginActivity : AppCompatActivity() {
                 "&src=${getString(R.string.app_name)}"
             )
             intent.data = uri
-            
-            // 检查百度地图是否已安装
-            if (intent.resolveActivity(packageManager) != null) {
+
+            try {
                 startActivity(intent)
-            } else {
-                // 未安装百度地图APP，跳转到百度地图网页版
-                val webUri = "https://map.baidu.com/dir/" +
-                        "?origin=我的位置" +
-                        "&destination=北京天安门" +
-                        "&mode=driving" +
-                        "&src=${getString(R.string.app_name)}"
-                val webIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(webUri))
-                startActivity(webIntent)
-                
-                Toast.makeText(this, "您未安装百度地图APP，已为您跳转到网页版导航", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Log.e(TAG, "未安装百度地图APP", e)
+                Toast.makeText(this, "未安装百度地图APP", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             Log.e(TAG, "打开百度地图失败", e)
