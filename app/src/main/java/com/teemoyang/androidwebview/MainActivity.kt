@@ -15,7 +15,6 @@ import android.content.Context
 import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.widget.Toast
 import kotlin.math.abs
@@ -53,7 +52,7 @@ import android.webkit.PermissionRequest
 import com.teemoyang.androidwebview.js.WebAppInterface
 import java.util.Properties
 
-class MainActivity : AppCompatActivity(), SensorEventListener {
+class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var binding: ActivityMainBinding
     
@@ -78,17 +77,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // 使用单例模式
     private val webSocketManager by lazy { WebSocketManager.getInstance() }
     private var isWebSocketConnected = false
-    
-    // 传感器相关
-    private lateinit var sensorManager: SensorManager
-    private var accelerometer: Sensor? = null
-    private var lastX = 0f
-    private var lastY = 0f
-    private var lastZ = 0f
-    private var lastUpdate: Long = 0
-    private val SHAKE_THRESHOLD = 800 // 摇动阈值
-    private val SHAKE_INTERVAL = 1000 // 两次摇动之间的最小间隔（毫秒）
-    private var lastShakeTime: Long = 0
     
     // 重命名以更清晰地表达变量含义
     private var hasBeaconData = false
@@ -381,9 +369,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // 设置返回键处理，兼容新旧版本Android
         setupBackNavigation()
         
-        // 初始化摇一摇功能
-//        initShakeDetection()
-
         // 初始化按钮
         initButtons()
         
@@ -474,26 +459,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
     
-    private fun initShakeDetection() {
-        // 获取传感器服务
-        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
-        
-        // 获取加速度传感器
-        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        
-        // 如果设备没有加速度传感器，显示提示
-        if (accelerometer == null) {
-            Toast.makeText(this, "该设备不支持摇一摇功能", Toast.LENGTH_SHORT).show()
-        }
-    }
-    
     override fun onResume() {
         super.onResume()
-        // 注册传感器监听
-        accelerometer?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
-        }
-        
         // 检查定位权限变化
         checkLocationPermissionChanges()
     }
@@ -519,12 +486,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
     
-    override fun onPause() {
-        super.onPause()
-        // 取消传感器监听
-        sensorManager.unregisterListener(this)
-    }
-    
     override fun onDestroy() {
         super.onDestroy()
         // 停止信标扫描
@@ -539,53 +500,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // 取消定时器
         beaconTimer?.cancel()
         beaconTimer = null
-        
-        // 解注册传感器监听器
-        sensorManager.unregisterListener(this)
-    }
-    
-    override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            val currentTime = System.currentTimeMillis()
-            
-            // 设置最小间隔，避免过于频繁计算
-            if ((currentTime - lastUpdate) > 100) {
-                val diffTime = currentTime - lastUpdate
-                lastUpdate = currentTime
-                
-                val x = event.values[0]
-                val y = event.values[1]
-                val z = event.values[2]
-                
-                // 计算加速度变化
-                val speed = abs(x + y + z - lastX - lastY - lastZ) / diffTime * 10000
-                
-                // 如果变化超过阈值，并且距离上次触发有足够间隔
-                if (speed > SHAKE_THRESHOLD && (currentTime - lastShakeTime > SHAKE_INTERVAL)) {
-                    lastShakeTime = currentTime
-                    
-                    // 检测到摇动，打开WebSocket日志页面
-                    onShakeDetected()
-                }
-                
-                lastX = x
-                lastY = y
-                lastZ = z
-            }
-        }
-    }
-    
-    override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {
-        // 忽略精度变化
-    }
-    
-    private fun onShakeDetected() {
-        // 显示提示
-        Toast.makeText(this, "检测到摇动，打开WebSocket日志页面", Toast.LENGTH_SHORT).show()
-        
-        // 启动WebSocket日志Activity
-        val intent = Intent(this, WebSocketLogActivity::class.java)
-        startActivity(intent)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
