@@ -22,6 +22,9 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     
+    <!-- 添加摄像头权限 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    
     <!-- 添加传感器权限 -->
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true" />
     <uses-feature android:name="android.hardware.location.gps" android:required="true" />

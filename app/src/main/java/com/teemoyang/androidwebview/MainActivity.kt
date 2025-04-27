@@ -49,6 +49,7 @@ import android.view.View
 import android.os.Handler
 import android.os.Looper
 import android.app.ProgressDialog
+import android.webkit.PermissionRequest
 import com.teemoyang.androidwebview.js.WebAppInterface
 import java.util.Properties
 
@@ -139,6 +140,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private const val KEY_FIRST_TIME_PERMISSION = "first_time_location_permission"
         // 使用WebAppInterface中定义的常量
         private const val SPEECH_RECOGNITION_REQUEST_CODE = WebAppInterface.SPEECH_RECOGNITION_REQUEST_CODE
+        
+        // 权限请求码
+        private const val CAMERA_PERMISSION_REQUEST_CODE = 1003
     }
     
     // 添加字节转十六进制的工具方法
@@ -322,6 +326,41 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     // 没有权限时拒绝网页使用定位
                     callback?.invoke(origin, false, false)
                     Log.e("MainActivity.WebView.Permission", "应用没有定位权限，已拒绝网页定位请求: $origin")
+                }
+            }
+            
+            // 处理网页请求摄像头权限
+            override fun onPermissionRequest(request: PermissionRequest) {
+                // 在UI线程上处理权限请求
+                runOnUiThread {
+                    // 检查摄像头权限
+                    if (ContextCompat.checkSelfPermission(
+                            this@MainActivity,
+                            Manifest.permission.CAMERA
+                        ) == PackageManager.PERMISSION_GRANTED) {
+                        // 如果已有权限，授予网页摄像头访问权限
+                        val resources = request.resources.filter { 
+                            it == PermissionRequest.RESOURCE_VIDEO_CAPTURE 
+                        }.toTypedArray()
+                        
+                        if (resources.isNotEmpty()) {
+                            request.grant(resources)
+                            Log.d("MainActivity.WebView.Permission", "摄像头权限已授予网页")
+                        } else {
+                            request.deny()
+                        }
+                    } else {
+                        // 如果没有权限，向用户请求权限
+                        ActivityCompat.requestPermissions(
+                            this@MainActivity,
+                            arrayOf(Manifest.permission.CAMERA),
+                            CAMERA_PERMISSION_REQUEST_CODE
+                        )
+                        
+                        // 暂时拒绝网页请求，等待用户授权后WebView会再次请求
+                        request.deny()
+                        Log.d("MainActivity.WebView.Permission", "请求摄像头权限中，暂时拒绝网页请求")
+                    }
                 }
             }
         }
@@ -898,6 +937,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 startBeaconScan()
             } else {
                 Log.e("MainActivity", "蓝牙权限被拒绝")
+            }
+        }
+        
+        // 处理摄像头权限请求结果
+        else if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d("MainActivity", "摄像头权限已授予")
+                // 重新加载WebView以便网页可以使用新授予的权限
+                webView.reload()
+                Toast.makeText(this, "摄像头权限已授予", Toast.LENGTH_SHORT).show()
+            } else {
+                Log.d("MainActivity", "摄像头权限被拒绝")
+                Toast.makeText(this, "没有摄像头权限，视频和扫码功能可能无法使用", Toast.LENGTH_SHORT).show()
             }
         }
     }
