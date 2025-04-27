@@ -388,9 +388,9 @@ class LoginActivity : AppCompatActivity() {
             val uri = android.net.Uri.parse(
                 "amapuri://route/plan/?" +
                 "sourceApplication=${getString(R.string.app_name)}" +
-                "&dname=北京天安门" +
-                "&dlat=39.90923" +
-                "&dlon=116.397428" +
+                "&dname=鹏城实验室石壁龙园区-南1门" +
+                "&dlat=22.627867685889747" +
+                "&dlon=113.93163545312994" +
                 "&dev=0" +
                 "&t=0"
             )
@@ -429,8 +429,8 @@ class LoginActivity : AppCompatActivity() {
             
             val uri = android.net.Uri.parse(
                 "baidumap://map/direction?" +
-                "destination=name:北京天安门|latlng:39.915,116.404" +
-                "&coord_type=bd09ll" +
+                "destination=name:北京天安门|latlng:22.627867685889747,113.93163545312994" +
+                "&coord_type=wgs84" +
                 "&mode=driving" +
                 "&src=${getString(R.string.app_name)}"
             )
@@ -472,8 +472,8 @@ class LoginActivity : AppCompatActivity() {
                 "mapapp://navigation?" +
                 "type=99" +
                 "&sourceApplication=${getString(R.string.app_name)}" +
-                "&dlat=39.90923" +
-                "&dlon=116.397428" +
+                "&dlat=22.627867685889747" +
+                "&dlon=113.93163545312994" +
                 "&dname=北京天安门" +
                 "&nav_type=0"  // 导航类型，0表示驾车导航
             )
