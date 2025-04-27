@@ -382,7 +382,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         setupBackNavigation()
         
         // 初始化摇一摇功能
-        initShakeDetection()
+//        initShakeDetection()
 
         // 初始化按钮
         initButtons()
@@ -651,6 +651,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         binding.fabWebSocketLog.setOnClickListener {
             startActivity(Intent(this, WebSocketLogActivity::class.java))
         }
+
+        binding.fabWebSocketLog.visibility = View.GONE
         
         // 设置语音识别按钮点击事件 - 添加悬浮按钮
         // binding.fabSpeechRecognizer.setOnClickListener {
@@ -664,6 +666,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             // 显示确认对话框
             showLogoutConfirmDialog()
         }
+
+        binding.fabLogout.visibility = View.GONE
         
         // 设置加速度计按钮（已隐藏，不再使用）
         // binding.btnAccelerometer.setOnClickListener {
@@ -689,7 +693,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
             // startActivityForResult(Intent(this, SpeechRecognitionActivity::class.java), SPEECH_RECOGNITION_REQUEST_CODE)
         }
-        
+
+        binding.fabSpeechRecognitionActivity.visibility = View.GONE
     }
 
     /**
