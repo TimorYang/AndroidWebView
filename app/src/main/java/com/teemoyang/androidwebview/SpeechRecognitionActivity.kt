@@ -405,8 +405,6 @@ class SpeechRecognitionActivity : AppCompatActivity(), INativeNuiCallback {
         // 显示搜索结果
         binding.tvPrompt.text = "搜索"
         binding.tvSuggestion1.text = query
-        binding.tvSuggestion2.visibility = View.GONE
-        binding.tvSuggestion3.visibility = View.GONE
         
         // 修改提示文字
         binding.tvListening.text = "按住说话"
@@ -444,12 +442,7 @@ class SpeechRecognitionActivity : AppCompatActivity(), INativeNuiCallback {
     private fun resetSuggestions() {
         // 重置建议区域到初始状态
         binding.tvPrompt.text = "您可以说:"
-        binding.tvSuggestion1.text = "急诊室"
-        binding.tvSuggestion2.text = "卫生间"
-        binding.tvSuggestion3.text = "自助服务区"
-        binding.tvSuggestion2.visibility = View.VISIBLE
-        binding.tvSuggestion3.visibility = View.VISIBLE
-        
+        binding.tvSuggestion1.text = "卫生间"
         // 隐藏搜索结果
         binding.tvNoResults.visibility = View.GONE
     }
@@ -528,8 +521,6 @@ class SpeechRecognitionActivity : AppCompatActivity(), INativeNuiCallback {
                             if (result.isNotEmpty()) {
                                 binding.tvPrompt.text = "搜索"
                                 binding.tvSuggestion1.text = result
-                                binding.tvSuggestion2.visibility = View.GONE
-                                binding.tvSuggestion3.visibility = View.GONE
                             }
                         }
                         
@@ -892,22 +883,9 @@ class SpeechRecognitionActivity : AppCompatActivity(), INativeNuiCallback {
                     } else {
                         binding.tvSuggestion1.visibility = View.GONE
                     }
-                    
-                    if (suggestionArray.size > 1) {
-                        binding.tvSuggestion2.text = suggestionArray[1]
-                        binding.tvSuggestion2.visibility = View.VISIBLE
-                    } else {
-                        binding.tvSuggestion2.visibility = View.GONE
-                    }
-                    
-                    if (suggestionArray.size > 2) {
-                        binding.tvSuggestion3.text = suggestionArray[2]
-                        binding.tvSuggestion3.visibility = View.VISIBLE
-                    } else {
-                        binding.tvSuggestion3.visibility = View.GONE
-                    }
-                    
-                    Log.d(TAG, "已应用自定义建议选项: $suggestionsJson")
+
+
+                Log.d(TAG, "已应用自定义建议选项: $suggestionsJson")
                 } catch (e: Exception) {
                     Log.e(TAG, "解析建议选项JSON失败: ${e.message}")
                 }

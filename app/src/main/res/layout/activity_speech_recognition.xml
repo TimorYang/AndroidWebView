@@ -38,39 +38,13 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
-        android:text="急诊室"
-        android:textColor="#6AC3A9"
-        android:textSize="32sp"
-        android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tvPrompt" />
-
-    <TextView
-        android:id="@+id/tvSuggestion2"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
         android:text="卫生间"
         android:textColor="#6AC3A9"
         android:textSize="32sp"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tvSuggestion1" />
-
-    <TextView
-        android:id="@+id/tvSuggestion3"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="自助服务区"
-        android:textColor="#6AC3A9"
-        android:textSize="32sp"
-        android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tvSuggestion2" />
+        app:layout_constraintTop_toBottomOf="@+id/tvPrompt" />
 
     <TextView
         android:id="@+id/tvListening"
@@ -139,7 +113,7 @@
         android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tvSuggestion3" />
+        app:layout_constraintTop_toBottomOf="@+id/tvSuggestion1" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerViewResults"
