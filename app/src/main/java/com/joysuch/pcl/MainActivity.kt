@@ -772,7 +772,7 @@ class MainActivity : AppCompatActivity() {
                 // 启动蓝牙扫描
                 startBeaconScan()
                 // 启动WiFi扫描
-//                startWifiScan()
+                startWifiScan()
                 // 在获取位置权限后启动10秒的定时任务
                 locationTimerTask()
                 
@@ -1157,8 +1157,10 @@ class MainActivity : AppCompatActivity() {
             // 从SensorDataManager获取最新的Beacon数据
             val beacons = SensorDataManager.getInstance().getBeaconData()
             
-            // 在方法内定义rssiBeaconMap
-            val rssiBeaconMap = mutableMapOf<String, Int>()
+            // 跟踪信号最强的Beacon
+            var strongestRssi = Int.MIN_VALUE
+            var strongestId: String? = null
+            var strongestMac: String? = null
             
             // 处理每个beacon
             for (beacon in beacons) {
@@ -1189,25 +1191,37 @@ class MainActivity : AppCompatActivity() {
                         // 生成MAC地址
                         val mac = code + majorHex + minorHex
                         
-                        // 存储或更新RSSI值
-                        val currentRssi = rssiBeaconMap[mac.toUpperCase()]
-                        if (currentRssi == null || rssi > currentRssi) {
-                            rssiBeaconMap[mac.toUpperCase()] = rssi
+                        // 如果这个Beacon的信号比当前记录的最强信号还强，则更新
+                        if (rssi > strongestRssi) {
+                            strongestRssi = rssi
+                            strongestId = mac.toUpperCase()
+                            strongestMac = beacon.bluetoothAddress
+                            Log.d("MainActivity.Beacon", "发现更强信号: $mac, RSSI: $rssi, 蓝牙地址: ${beacon.bluetoothAddress}")
                         }
                     }
                 }
             }
             
-            if (rssiBeaconMap.isNotEmpty()) {
-                // 创建Beacon数组
-                val didArray = JSONArray()
+            // 检查是否找到了有效的最强信号Beacon
+            if (strongestId != null) {
+                Log.d("MainActivity.Beacon", "选取信号最强的Beacon: ID=$strongestId, RSSI=$strongestRssi, MAC=$strongestMac")
                 
-                // 遍历rssiBeaconMap，生成JSON对象
-                for ((mac, rssiValue) in rssiBeaconMap) {
-                    val obj = JSONObject()
-                    obj.put("id", mac)
-                    obj.put("rssi", rssiValue)
-                    didArray.put(obj)
+                // 创建只包含最强Beacon的数组
+                val didArray = JSONArray()
+                val obj = JSONObject()
+                obj.put("id", strongestId)
+                obj.put("rssi", strongestRssi)
+                didArray.put(obj)
+                
+                val strongestWifiData = getStrongestWifiData()
+                // 如果有WiFi数据，也添加到didArray
+                if (strongestWifiData != null) {
+                    val (wifiId, wifiRssi) = strongestWifiData
+                    val wifiObj = JSONObject()
+                    wifiObj.put("id", wifiId)
+                    wifiObj.put("rssi", wifiRssi)
+                    didArray.put(wifiObj)
+                    Log.d("MainActivity.WiFi", "将最强WiFi信号添加到数据中: ID=$wifiId, RSSI=$wifiRssi")
                 }
                 
                 // 创建map数组
@@ -1270,6 +1284,8 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     Log.e("MainActivity.webSocket.sendMessage", "WebSocket未连接，无法发送定位数据")
                 }
+            } else {
+                Log.d("MainActivity.webSocket.sendMessage", "没有找到有效的Beacon")
             }
         } catch (e: Exception) {
             Log.e("MainActivity.webSocket.sendMessage", "处理Beacon数据出错: ${e.message}")
@@ -1277,7 +1293,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun sendWifiData() {
+    /**
+     * 获取信号最强的WiFi数据
+     * @return Pair<String, Int>? 包含WiFi ID和信号强度的键值对，如果没有找到则返回null
+     */
+    private fun getStrongestWifiData(): Pair<String, Int>? {
         try {
             // 从SensorDataManager获取最新的Wifi数据
             val wifiData = SensorDataManager.getInstance().getWifiScanResults()
@@ -1285,10 +1305,12 @@ class MainActivity : AppCompatActivity() {
             // 固定使用code "0001"，对应UUID 1918FC80-B111-3441-A9AC-B1001C2FE510
             val wifiCode = "0001"
             
-            // 在方法内定义wifiRssiMap
-            val wifiRssiMap = mutableMapOf<String, Int>()
+            // 跟踪信号最强的WiFi
+            var strongestRssi = Int.MIN_VALUE
+            var strongestId: String? = null
+            var strongestMac: String? = null
             
-            // 处理每个WiFi扫描结果
+            // 处理每个WiFi扫描结果，找出信号最强的一个
             for (scanResult in wifiData) {
                 try {
                     // 获取MAC地址，跳过没有MAC地址的WiFi热点
@@ -1309,11 +1331,12 @@ class MainActivity : AppCompatActivity() {
                         // 生成ID (格式: code + major + minor)
                         val id = wifiCode + major + minor
                         
-                        // 存储或更新RSSI值 - 只保留信号最强的
-                        val currentRssi = wifiRssiMap[id.toUpperCase()]
-                        if (currentRssi == null || rssi > currentRssi) {
-                            wifiRssiMap[id.toUpperCase()] = rssi
-                            Log.d("MainActivity.WiFi", "WiFi: $macAddress, RSSI: $rssi, ID: $id")
+                        // 如果这个WiFi的信号比当前记录的最强信号还强，则更新
+                        if (rssi > strongestRssi) {
+                            strongestRssi = rssi
+                            strongestId = id.toUpperCase()
+                            strongestMac = macAddress
+                            Log.d("MainActivity.WiFi", "发现更强信号: $macAddress, RSSI: $rssi, ID: $id")
                         }
                     }
                 } catch (e: Exception) {
@@ -1323,84 +1346,18 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             
-            if (wifiRssiMap.isNotEmpty()) {
-                // 创建WiFi数组
-                val didArray = JSONArray()
-                
-                // 遍历wifiRssiMap，生成JSON对象
-                for ((id, rssiValue) in wifiRssiMap) {
-                    val obj = JSONObject()
-                    obj.put("id", id)
-                    obj.put("rssi", rssiValue)
-                    didArray.put(obj)
-                }
-                
-                // 创建map数组
-                val mapArray = JSONArray()
-                for ((code, uuid) in codeToUuid) {
-                    val mapObj = JSONObject()
-                    mapObj.put("key", code)
-                    mapObj.put("value", uuid)
-                    mapArray.put(mapObj)
-                }
-                
-                // 获取时间戳和格式化时间
-                val timestamp = System.currentTimeMillis()
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-                val currentDate = dateFormat.format(Date(timestamp))
-                
-                // 增加定位计数
-                locateCount++
-                
-                // 创建完整的定位请求数据
-                val locateJsonObj = JSONObject().apply {
-                    put("deviceId", deviceId)
-                    put("did", didArray)
-                    put("map", mapArray)
-                    put("locateCount", locateCount)
-                    put("currentDate", currentDate)
-                    put("timestamp", timestamp)
-                    put("time", currentDate)
-                    
-                    // 添加mac数组（空）
-                    put("mac", JSONArray())
-                    
-                    // 添加magnetic数组（空）
-                    put("magnetic", JSONArray())
-                    
-                    // 添加orientation数组（空）
-                    put("orientation", JSONArray())
-                    
-                    // 添加sensorInfo对象
-                    val sensorInfoObj = JSONObject().apply {
-                        put("isSensorValid", "0")
-                        put("step", "0")
-                        put("isMoving", "0")
-                        put("compassValue", "0")
-                    }
-                    put("sensorInfo", sensorInfoObj)
-                }
-                
-                // 发送到服务端
-                if (webSocketManager.isConnected()) {
-                    val dataObj = JSONObject().apply {
-                        put("httpLocateParam", locateJsonObj)
-                    }
-                    val success = webSocketManager.webSocketSend("1", "Engine", dataObj)
-                    if (success) {
-                        Log.d("MainActivity.webSocket.sendMessage", "WiFi定位数据发送成功: ${didArray.length()}个WiFi")
-                    } else {
-                        Log.e("MainActivity.webSocket.sendMessage", "WiFi定位数据发送失败")
-                    }
-                } else {
-                    Log.e("MainActivity.webSocket.sendMessage", "WebSocket未连接，无法发送WiFi数据")
-                }
+            // 返回最强WiFi的ID和RSSI
+            return if (strongestId != null) {
+                Log.d("MainActivity.WiFi", "选取信号最强的WiFi: MAC=$strongestMac, RSSI=$strongestRssi, ID=$strongestId")
+                Pair(strongestId, strongestRssi)
             } else {
-                Log.d("MainActivity.webSocket.sendMessage", "没有可用的WiFi数据")
+                Log.d("MainActivity.WiFi", "没有找到有效的WiFi热点")
+                null
             }
         } catch (e: Exception) {
-            Log.e("MainActivity.webSocket.sendMessage", "处理WiFi数据出错: ${e.message}")
+            Log.e("MainActivity.WiFi", "处理WiFi数据出错: ${e.message}")
             e.printStackTrace()
+            return null
         }
     }
     
