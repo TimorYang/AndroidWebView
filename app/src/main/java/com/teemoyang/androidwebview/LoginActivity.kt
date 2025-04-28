@@ -74,13 +74,9 @@ class LoginActivity : AppCompatActivity() {
         // 初始化SharedPreferences
         sharedPreferences = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         
-        // 检查用户是否已登录，如果已登录则直接进入MainActivity
-        if (UserSession.isLoggedIn()) {
-            Log.d(TAG, "用户已登录，直接进入主界面")
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
-            return
-        }
+        // 清除现有的登录状态，确保用户需要重新登录
+        UserSession.clearLoginInfo()
+        Log.d(TAG, "已清除现有登录状态")
         
         setContentView(R.layout.activity_login)
 
