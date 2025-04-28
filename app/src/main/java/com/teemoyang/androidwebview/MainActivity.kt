@@ -376,6 +376,20 @@ class MainActivity : AppCompatActivity() {
         connectToWebSocket()
     }
     
+    override fun onStart() {
+        super.onStart()
+        
+        // 当应用从后台恢复时，检查登录状态
+        if (!UserSession.isLoggedIn()) {
+            Log.d("MainActivity", "应用从后台恢复，检测到用户未登录，跳转到登录页面")
+            val intent = Intent(this, LoginActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
+            finish()
+            return
+        }
+    }
+    
     /**
      * 连接到WebSocket服务器
      */
@@ -483,6 +497,82 @@ class MainActivity : AppCompatActivity() {
                     helper.showLocationSettingsDialog(this@MainActivity)
                 }
             }
+        }
+    }
+    
+    override fun onStop() {
+        super.onStop()
+        
+        // 当应用退到后台时，自动退出登录（只清除登录信息，不跳转界面）
+        clearLoginState()
+        
+        Log.d("MainActivity", "应用退到后台，已自动退出登录")
+    }
+    
+    /**
+     * 清除登录状态（应用退到后台时调用）
+     */
+    private fun clearLoginState() {
+        try {
+            // 关闭WebSocket连接
+            if (webSocketManager.isConnected()) {
+                webSocketManager.close()
+            }
+            
+            // 取消定时器
+            beaconTimer?.cancel()
+            beaconTimer = null
+            
+            // 停止信标扫描
+            beaconScanner?.release()
+            beaconScanner = null
+            
+            // 关闭定位服务
+            locationHelper?.stopLocationUpdates()
+            
+            // 清空用户会话
+            UserSession.clearLoginInfo()
+            
+            Log.d("MainActivity", "已清除登录状态")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "清除登录状态失败: ${e.message}")
+        }
+    }
+    
+    /**
+     * 执行登出操作（用户手动退出时调用，会跳转到登录页面）
+     */
+    private fun performLogout() {
+        try {
+            // 关闭WebSocket连接
+            if (webSocketManager.isConnected()) {
+                webSocketManager.close()
+            }
+            
+            // 取消定时器
+            beaconTimer?.cancel()
+            beaconTimer = null
+            
+            // 停止信标扫描
+            beaconScanner?.release()
+            beaconScanner = null
+            
+            // 关闭定位服务
+            locationHelper?.stopLocationUpdates()
+            
+            // 清空用户会话
+            UserSession.clearLoginInfo()
+            
+            // 跳转到登录页面
+            val intent = Intent(this, LoginActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
+            finish()
+            
+            Toast.makeText(this, "已成功登出", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e("MainActivity", "登出失败: ${e.message}")
+            Toast.makeText(this, "登出失败: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
     
@@ -864,7 +954,6 @@ class MainActivity : AppCompatActivity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d("MainActivity", "摄像头权限已授予")
                 // 重新加载WebView以便网页可以使用新授予的权限
-                webView.reload()
                 Toast.makeText(this, "摄像头权限已授予", Toast.LENGTH_SHORT).show()
             } else {
                 Log.d("MainActivity", "摄像头权限被拒绝")
@@ -1337,43 +1426,6 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("取消", null)
             .show()
-    }
-    
-    /**
-     * 执行登出操作
-     */
-    private fun performLogout() {
-        try {
-            // 关闭WebSocket连接
-            if (webSocketManager.isConnected()) {
-                webSocketManager.close()
-            }
-            
-            // 取消定时器
-            beaconTimer?.cancel()
-            beaconTimer = null
-            
-            // 停止信标扫描
-            beaconScanner?.release()
-            beaconScanner = null
-            
-            // 关闭定位服务
-            locationHelper?.stopLocationUpdates()
-            
-            // 清空用户会话
-            UserSession.clearLoginInfo()
-            
-            // 跳转到登录页面
-            val intent = Intent(this, LoginActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            startActivity(intent)
-            finish()
-            
-            Toast.makeText(this, "已成功登出", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Log.e("MainActivity", "登出失败: ${e.message}")
-            Toast.makeText(this, "登出失败: ${e.message}", Toast.LENGTH_LONG).show()
-        }
     }
     
     /**
