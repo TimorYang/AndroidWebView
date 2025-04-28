@@ -1,6 +1,8 @@
 package com.teemoyang.androidwebview
 
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.text.method.HideReturnsTransformationMethod
 import android.text.method.PasswordTransformationMethod
@@ -27,7 +29,7 @@ import retrofit2.Response
 class LoginActivity : AppCompatActivity() {
 
     // UI组件
-    private  lateinit var employeeTabContainer: RelativeLayout
+    private lateinit var employeeTabContainer: RelativeLayout
     private lateinit var employeeTab: TextView
     private lateinit var visitorTabContainer: RelativeLayout
     private lateinit var visitorTab: TextView
@@ -48,15 +50,29 @@ class LoginActivity : AppCompatActivity() {
 
     // 当前选中的标签
     private var currentTab = TAB_EMPLOYEE
+    
+    // SharedPreferences对象，用于存储登录信息
+    private lateinit var sharedPreferences: SharedPreferences
 
     companion object {
         private const val TAB_EMPLOYEE = 0
         private const val TAB_VISITOR = 1
         private const val TAG = "LoginActivity"
+        
+        // SharedPreferences相关常量
+        private const val PREF_NAME = "LoginPreferences"
+        private const val KEY_ROLE_TYPE = "roleType"
+        private const val KEY_USERNAME = "username"
+        private const val KEY_PASSWORD = "password" // 注意：实际应用中不建议明文存储密码
+        private const val KEY_VISITOR_NAME = "visitorName"
+        private const val KEY_ID_CARD = "idCard"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // 初始化SharedPreferences
+        sharedPreferences = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         
         // 检查用户是否已登录，如果已登录则直接进入MainActivity
         if (UserSession.isLoggedIn()) {
@@ -70,8 +86,12 @@ class LoginActivity : AppCompatActivity() {
 
         // 初始化UI组件
         initUI()
+        
         // 设置点击事件
         setupListeners()
+        
+        // 加载保存的登录信息
+        loadSavedLoginInfo()
     }
 
     private fun initUI() {
@@ -96,9 +116,6 @@ class LoginActivity : AppCompatActivity() {
         // 按钮
         loginButton = findViewById(R.id.loginButton)
         navigationButton = findViewById(R.id.navigationButton)
-
-        // 初始显示内部员工表单
-        showEmployeeTab()
     }
 
     private fun setupListeners() {
@@ -143,6 +160,48 @@ class LoginActivity : AppCompatActivity() {
             // 显示地图选择底部弹窗
             showMapSelectionDialog()
         }
+    }
+
+    /**
+     * 加载保存的登录信息
+     */
+    private fun loadSavedLoginInfo() {
+        // 获取保存的角色类型
+        val savedRoleType = sharedPreferences.getInt(KEY_ROLE_TYPE, TAB_EMPLOYEE)
+        
+        // 根据保存的角色类型显示相应的标签和表单
+        if (savedRoleType == TAB_EMPLOYEE) {
+            showEmployeeTab()
+            // 填充员工登录信息
+            usernameInput.setText(sharedPreferences.getString(KEY_USERNAME, ""))
+            passwordInput.setText(sharedPreferences.getString(KEY_PASSWORD, ""))
+        } else {
+            showVisitorTab()
+            // 填充访客登录信息
+            nameInput.setText(sharedPreferences.getString(KEY_VISITOR_NAME, ""))
+            idCardInput.setText(sharedPreferences.getString(KEY_ID_CARD, ""))
+        }
+    }
+    
+    /**
+     * 保存登录信息 - 现在默认总是保存
+     */
+    private fun saveLoginInfo() {
+        val editor = sharedPreferences.edit()
+        editor.putInt(KEY_ROLE_TYPE, currentTab)
+        
+        if (currentTab == TAB_EMPLOYEE) {
+            // 保存员工登录信息
+            editor.putString(KEY_USERNAME, usernameInput.text.toString().trim())
+            editor.putString(KEY_PASSWORD, passwordInput.text.toString().trim())
+        } else {
+            // 保存访客登录信息
+            editor.putString(KEY_VISITOR_NAME, nameInput.text.toString().trim())
+            editor.putString(KEY_ID_CARD, idCardInput.text.toString().trim())
+        }
+        
+        editor.apply()
+        Log.d(TAG, "已保存登录信息，角色类型: ${if (currentTab == TAB_EMPLOYEE) "员工" else "访客"}")
     }
 
     private fun showEmployeeTab() {
@@ -280,6 +339,9 @@ class LoginActivity : AppCompatActivity() {
                         if (userData != null) {
                             // 保存用户数据到会话
                             UserSession.saveUserData(userData)
+                            
+                            // 默认总是保存登录信息
+                            saveLoginInfo()
                             
                             val welcomeMessage = when (currentTab) {
                                 TAB_EMPLOYEE -> "内部员工登录成功: ${userData.userName}"
