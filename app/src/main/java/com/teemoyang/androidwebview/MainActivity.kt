@@ -150,7 +150,9 @@ class MainActivity : AppCompatActivity() {
 
         // 检查用户是否已登录，如果未登录则跳转到登录页面
         if (!UserSession.isLoggedIn()) {
-            startActivity(Intent(this, LoginActivity::class.java))
+            val intent = Intent(this, LoginActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
             finish()
             return
         }
@@ -167,7 +169,9 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e("MainActivity", "获取用户数据失败", e)
             // 返回登录页面
-            startActivity(Intent(this, LoginActivity::class.java))
+            val intent = Intent(this, LoginActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
             finish()
         }
 
@@ -234,7 +238,7 @@ class MainActivity : AppCompatActivity() {
         WebView.setWebContentsDebuggingEnabled(true)
         
         // 获取并显示设备ID
-        displayDeviceId()
+        // displayDeviceId()
         
         // 设置系统栏适配
         WindowCompat.setDecorFitsSystemWindows(window, true)
@@ -381,12 +385,44 @@ class MainActivity : AppCompatActivity() {
         
         // 当应用从后台恢复时，检查登录状态
         if (!UserSession.isLoggedIn()) {
-            Log.d("MainActivity", "应用从后台恢复，检测到用户未登录，跳转到登录页面")
+            Log.d("MainActivity", "检测到用户未登录，释放资源并跳转到登录页面")
+            releaseResources()
+            
+            // 跳转到登录页面
             val intent = Intent(this, LoginActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
             finish()
             return
+        }
+    }
+    
+    /**
+     * 释放资源
+     */
+    private fun releaseResources() {
+        try {
+            // 关闭WebSocket连接
+            if (webSocketManager.isConnected()) {
+                webSocketManager.close()
+            }
+            
+            // 取消定时器
+            beaconTimer?.cancel()
+            beaconTimer = null
+            
+            // 停止信标扫描
+            beaconScanner?.release()
+            beaconScanner = null
+            
+            // 关闭定位服务
+            locationHelper?.stopLocationUpdates()
+
+            webView.destroy()
+            
+            Log.d("MainActivity", "已释放所有资源")
+        } catch (e: Exception) {
+            Log.e("MainActivity", "释放资源失败: ${e.message}")
         }
     }
     
@@ -500,45 +536,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    override fun onStop() {
-        super.onStop()
-        
-        // 当应用退到后台时，自动退出登录（只清除登录信息，不跳转界面）
-        clearLoginState()
-        
-        Log.d("MainActivity", "应用退到后台，已自动退出登录")
-    }
-    
-    /**
-     * 清除登录状态（应用退到后台时调用）
-     */
-    private fun clearLoginState() {
-        try {
-            // 关闭WebSocket连接
-            if (webSocketManager.isConnected()) {
-                webSocketManager.close()
-            }
-            
-            // 取消定时器
-            beaconTimer?.cancel()
-            beaconTimer = null
-            
-            // 停止信标扫描
-            beaconScanner?.release()
-            beaconScanner = null
-            
-            // 关闭定位服务
-            locationHelper?.stopLocationUpdates()
-            
-            // 清空用户会话
-            UserSession.clearLoginInfo()
-            
-            Log.d("MainActivity", "已清除登录状态")
-        } catch (e: Exception) {
-            Log.e("MainActivity", "清除登录状态失败: ${e.message}")
-        }
-    }
-    
     /**
      * 执行登出操作（用户手动退出时调用，会跳转到登录页面）
      */
@@ -590,6 +587,13 @@ class MainActivity : AppCompatActivity() {
         // 取消定时器
         beaconTimer?.cancel()
         beaconTimer = null
+
+        // 关闭定位服务
+        locationHelper?.stopLocationUpdates()
+
+        webView.destroy()
+            
+        Log.d("MainActivity", "已释放所有资源")
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
