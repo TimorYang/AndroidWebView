@@ -429,7 +429,7 @@ class LoginActivity : AppCompatActivity() {
             
             val uri = android.net.Uri.parse(
                 "baidumap://map/direction?" +
-                "destination=name:北京天安门|latlng:22.627867685889747,113.93163545312994" +
+                "destination=name:鹏城实验室石壁龙园区-南1门|latlng:22.627867685889747,113.93163545312994" +
                 "&coord_type=wgs84" +
                 "&mode=driving" +
                 "&src=${getString(R.string.app_name)}"
@@ -474,7 +474,7 @@ class LoginActivity : AppCompatActivity() {
                 "&sourceApplication=${getString(R.string.app_name)}" +
                 "&dlat=22.627867685889747" +
                 "&dlon=113.93163545312994" +
-                "&dname=北京天安门" +
+                "&dname=鹏城实验室石壁龙园区-南1门" +
                 "&nav_type=0"  // 导航类型，0表示驾车导航
             )
             intent.data = uri
