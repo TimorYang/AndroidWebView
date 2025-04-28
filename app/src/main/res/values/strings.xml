@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">AndroidWebView</string>
+    <string name="app_name">PCL导航</string>
     
     <!-- WebSocket消息类型 -->
     <string-array name="message_types">

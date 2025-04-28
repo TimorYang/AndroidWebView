@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AndroidWebView"
+rootProject.name = "PCL导航"
 include ':app'

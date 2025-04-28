@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace 'com.teemoyang.androidwebview'
+    namespace 'com.joysuch.pcl'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.teemoyang.androidwebview"
+        applicationId "com.joysuch.pcl"
         minSdk 26
         targetSdk 34
         versionCode 1
